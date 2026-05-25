@@ -1,0 +1,14 @@
+name: Swarm CI
+on: [push]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Tests
+        run: pytest
+      - name: Build Docker
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false

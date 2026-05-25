@@ -1,0 +1,212 @@
+[
+  {
+    "id": "s1",
+    "name": "Ideation Agent",
+    "stage": "S1",
+    "function": "Breaks user request into structured tasks"
+  },
+  {
+    "id": "s2",
+    "name": "Research Agent",
+    "stage": "S2",
+    "function": "Researches patterns, libraries, and best practices"
+  },
+  {
+    "id": "s3",
+    "name": "PRD Agent",
+    "stage": "S3",
+    "function": "Writes Product Requirement Documents"
+  },
+  {
+    "id": "s4",
+    "name": "Architecture Agent",
+    "stage": "S4",
+    "function": "Designs system architecture and data models"
+  },
+  {
+    "id": "s5",
+    "name": "Backend Agent",
+    "stage": "S5",
+    "function": "Generates backend code and APIs"
+  },
+  {
+    "id": "s6",
+    "name": "API Agent",
+    "stage": "S6",
+    "function": "Designs and implements API endpoints"
+  },
+  {
+    "id": "s7",
+    "name": "Frontend Agent",
+    "stage": "S7",
+    "function": "Builds UI components and pages"
+  },
+  {
+    "id": "s8",
+    "name": "Testing Agent",
+    "stage": "S8",
+    "function": "Writes unit, integration, and E2E tests"
+  },
+  {
+    "id": "s9",
+    "name": "Deployment Agent",
+    "stage": "S9",
+    "function": "Creates Docker, CI/CD, and deploy configs"
+  },
+  {
+    "id": "s10",
+    "name": "Monitoring Agent",
+    "stage": "S10",
+    "function": "Sets up Prometheus, Grafana, and alerts"
+  },
+  {
+    "id": "s11",
+    "name": "Documentation Agent",
+    "stage": "S11",
+    "function": "Generates README, API docs, and guides"
+  },
+  {
+    "id": "s12",
+    "name": "Maintenance Agent",
+    "stage": "S12",
+    "function": "Dependency updates and security patches"
+  },
+  {
+    "id": "s13",
+    "name": "Design Agent",
+    "stage": "S13",
+    "function": "UI/UX polish and accessibility review"
+  },
+  {
+    "id": "b1",
+    "name": "KuzuDB Manager",
+    "stage": "BRAIN",
+    "function": "Graph database operations"
+  },
+  {
+    "id": "b2",
+    "name": "Neo4j Manager",
+    "stage": "BRAIN",
+    "function": "Graph RAG and relationships"
+  },
+  {
+    "id": "b3",
+    "name": "Growth Agent",
+    "stage": "GROWTH",
+    "function": "Self-improvement and skill evolution"
+  },
+  {
+    "id": "b4",
+    "name": "Memory Consolidator",
+    "stage": "BRAIN",
+    "function": "Compresses and archives old memory"
+  },
+  {
+    "id": "b5",
+    "name": "Context Router",
+    "stage": "BRAIN",
+    "function": "Routes context between agents"
+  },
+  {
+    "id": "r1",
+    "name": "Code Review Agent",
+    "stage": "REVIEW",
+    "function": "Reviews code quality and patterns"
+  },
+  {
+    "id": "r2",
+    "name": "Security Audit Agent",
+    "stage": "REVIEW",
+    "function": "Scans for vulnerabilities"
+  },
+  {
+    "id": "r3",
+    "name": "Performance Agent",
+    "stage": "REVIEW",
+    "function": "Benchmarks and optimizes"
+  },
+  {
+    "id": "se1",
+    "name": "Bugsink Sentry",
+    "stage": "SENTRY",
+    "function": "Error tracking and alerting"
+  },
+  {
+    "id": "se2",
+    "name": "Health Monitor",
+    "stage": "SENTRY",
+    "function": "System health checks"
+  },
+  {
+    "id": "t1",
+    "name": "GitNexus Indexer",
+    "stage": "TOOLS",
+    "function": "Codebase indexing and search"
+  },
+  {
+    "id": "t2",
+    "name": "GitNexus Risk Analyzer",
+    "stage": "TOOLS",
+    "function": "Security risk analysis"
+  },
+  {
+    "id": "t3",
+    "name": "OpenClaw Browser",
+    "stage": "TOOLS",
+    "function": "Web browsing and extraction"
+  },
+  {
+    "id": "t4",
+    "name": "Aider Adapter",
+    "stage": "TOOLS",
+    "function": "Coding assistant integration"
+  },
+  {
+    "id": "t5",
+    "name": "Goose Adapter",
+    "stage": "TOOLS",
+    "function": "Orchestration integration"
+  },
+  {
+    "id": "t6",
+    "name": "Hermes Adapter",
+    "stage": "TOOLS",
+    "function": "Nous Hermes integration"
+  },
+  {
+    "id": "t7",
+    "name": "Whisper STT",
+    "stage": "TOOLS",
+    "function": "Speech-to-text processing"
+  },
+  {
+    "id": "t8",
+    "name": "Edge-TTS",
+    "stage": "TOOLS",
+    "function": "Text-to-speech output"
+  },
+  {
+    "id": "t9",
+    "name": "API Router",
+    "stage": "TOOLS",
+    "function": "Provider fallback routing"
+  },
+  {
+    "id": "t10",
+    "name": "BitNet Runtime",
+    "stage": "TOOLS",
+    "function": "Quantized model inference"
+  },
+  {
+    "id": "t11",
+    "name": "MergeKit",
+    "stage": "TOOLS",
+    "function": "Model merging and fusion"
+  },
+  {
+    "id": "t12",
+    "name": "Speculative Decoder",
+    "stage": "TOOLS",
+    "function": "Draft model acceleration"
+  }
+]

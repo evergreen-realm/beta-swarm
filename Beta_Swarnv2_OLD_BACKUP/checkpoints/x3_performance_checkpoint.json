@@ -1,0 +1,1 @@
+{"idempotency_key": "29d58e92-e957-4041-a608-a02c2abf5b1d", "status": "completed", "data": {"result": {"status": "complete", "findings": [{"severity": "info", "type": "missing_cache", "file": "C:\\Users\\Admin\\AppData\\Local\\Temp\\tmpgm4v5_rx\\app\\main.py", "line": 6, "message": "Route handler 'health' has no caching"}], "passed": true}}, "last_updated": 1778765416.9920886}
