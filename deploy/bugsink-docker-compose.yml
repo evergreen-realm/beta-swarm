@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  bugsink:
+    image: bugsink/bugsink:latest
+    environment:
+      - BUGSINK_URL=http://localhost:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - bugsink_data:/data
+    networks:
+      - beta-swarm # Managed by bugsink-docker-compose.yml
+
+volumes:
+  bugsink_data:
+    name: bugsink_data
+
+networks:
+  beta-swarm:
+    name: beta-swarm
+    external: true

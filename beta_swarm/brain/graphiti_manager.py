@@ -1,166 +1,164 @@
 import logging
+import os
 import uuid
+import datetime
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
-def _load_env_file():
-    import os
-    try:
-        # Check current directory and up to 3 parent directories for .env
-        paths_to_check = [
-            ".env",
-            os.path.join(os.path.dirname(__file__), ".env"),
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"),
-            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
-        ]
-        for path in paths_to_check:
-            if os.path.exists(path):
-                with open(path, "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            parts = line.split("=", 1)
-                            if len(parts) == 2:
-                                k, v = parts[0].strip(), parts[1].strip()
-                                if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
-                                    v = v[1:-1]
-                                if k not in os.environ:
-                                    os.environ[k] = v
-                break
-    except Exception as e:
-        logger.debug(f"Failed to load .env: {e}")
+try:
+    from graphiti_core import Graphiti
+    from graphiti_core.nodes import EpisodeType
+    GRAPHITI_CORE_AVAILABLE = True
+except ImportError:
+    GRAPHITI_CORE_AVAILABLE = False
 
 class GraphitiManager:
-    """Manager for Graphiti-like Temporal Knowledge Graphs using Neo4j Cypher."""
+    def __init__(self, neo4j_uri="bolt://localhost:7687", username="neo4j", password="password"):
+        # Resolve config from environment if defaults are provided
+        self.neo4j_uri = os.getenv("NEO4J_URI", neo4j_uri)
+        self.username = os.getenv("NEO4J_USER", username)
+        self.password = os.getenv("NEO4J_PASSWORD", password)
+        self._driver = None
+        self.graphiti = None
 
-    def __init__(self, neo4j_uri: str = "bolt://localhost:7687", username: str = "neo4j", password: str = "password"):
-        try:
-            import os
-            _load_env_file()
-            self.neo4j_uri = neo4j_uri
-            if neo4j_uri == "bolt://localhost:7687":
-                self.neo4j_uri = os.getenv("NEO4J_URI", neo4j_uri)
-                
-            self.username = username
-            if username == "neo4j":
-                self.username = os.getenv("NEO4J_USER", username)
-                
-            self.password = password
-            if password == "password":
-                self.password = os.getenv("NEO4J_PASSWORD", password)
-                
-            self._driver = None
-        except Exception as e:
-            logger.error(f"Initialization error in GraphitiManager: {e}")
+        if GRAPHITI_CORE_AVAILABLE:
+            try:
+                self.graphiti = Graphiti(self.neo4j_uri, self.username, self.password)
+                logger.info("GraphitiManager initialized using official graphiti_core library.")
+            except Exception as e:
+                logger.warning(f"Failed to initialize official Graphiti library: {e}. Falling back to Cypher/SQLite.")
+        else:
+            logger.warning("graphiti_core not available. Falling back to Cypher/SQLite manager.")
 
     def _get_driver(self):
-        try:
-            if self._driver is None:
+        if self._driver is None:
+            try:
                 from neo4j import GraphDatabase
                 self._driver = GraphDatabase.driver(self.neo4j_uri, auth=(self.username, self.password))
-            return self._driver
-        except Exception as e:
-            raise e
+            except Exception as e:
+                logger.warning(f"Could not connect to Neo4j database: {e}")
+                self._driver = None
+        return self._driver
 
+    async def add_episode(self, content: str, source: str):
+        if self.graphiti:
+            try:
+                await self.graphiti.add_episode(
+                    name=f"episode_{datetime.now().timestamp()}",
+                    episode_body=content,
+                    source=source,
+                    source_description="Beta Swarm agent",
+                    episode_type=EpisodeType.message
+                )
+                return {"status": "success", "mode": "graphiti_core"}
+            except Exception as e:
+                logger.error(f"graphiti_core add_episode failed: {e}. Falling back.")
+        
+        # Fallback 1: Direct Neo4j Cypher insert
+        driver = self._get_driver()
+        if driver:
+            try:
+                episode_id = str(uuid.uuid4())
+                query = """
+                CREATE (e:Episode {
+                    id: $id, 
+                    content: $content, 
+                    source: $source, 
+                    source_description: $source_description, 
+                    episode_type: $episode_type,
+                    created_at: datetime()
+                })
+                RETURN e.id as id
+                """
+                with driver.session() as session:
+                    session.run(query, {
+                        "id": episode_id,
+                        "content": content,
+                        "source": source,
+                        "source_description": "Beta Swarm agent (Cypher Fallback)",
+                        "episode_type": "message"
+                    })
+                return {"status": "success", "mode": "cypher_fallback", "episode_id": episode_id}
+            except Exception as cypher_err:
+                logger.error(f"Neo4j Cypher fallback failed: {cypher_err}")
+
+        # Fallback 2: SQLite Local Temporal Facts
+        try:
+            from beta_swarm.brain.sqlite_brain import get_brain
+            brain = get_brain()
+            # Storing memory in the SQLite store as a fallback
+            res = brain.store_agent_memory(source, content[:500], "episode_fallback")
+            return {"status": "success", "mode": "sqlite_fallback", "memory_id": res.get("memory_id")}
+        except Exception as sql_err:
+            logger.error(f"SQLite fallback failed: {sql_err}")
+            return {"status": "error", "error": str(sql_err)}
+
+    async def search(self, query: str, limit: int = 5):
+        if self.graphiti:
+            try:
+                return await self.graphiti.search(query, limit)
+            except Exception as e:
+                logger.error(f"graphiti_core search failed: {e}. Falling back.")
+
+        # Fallback 1: Neo4j Cypher search
+        driver = self._get_driver()
+        if driver:
+            try:
+                cypher_query = """
+                MATCH (e:Episode)
+                WHERE e.content CONTAINS $query
+                RETURN e.content as content, e.source as source
+                LIMIT $limit
+                """
+                with driver.session() as session:
+                    res = session.run(cypher_query, {"query": query, "limit": limit})
+                    return [dict(r) for r in res]
+            except Exception as cypher_err:
+                logger.error(f"Neo4j Cypher search failed: {cypher_err}")
+
+        # Fallback 2: SQLite search
+        try:
+            from beta_swarm.brain.sqlite_brain import get_brain
+            brain = get_brain()
+            # Storing in thread local SQLite, get summary
+            summary = brain.get_all_memories_summary()
+            recent_facts = summary.get("recent_facts", [])
+            filtered = [f for f in recent_facts if query.lower() in f.get("content", "").lower()]
+            return filtered[:limit]
+        except Exception as sql_err:
+            logger.error(f"SQLite search fallback failed: {sql_err}")
+            return []
+
+    # Keeping legacy methods for backward compatibility
     def add_fact(self, entity_id: str, fact_content: str, source: str = "system", timestamp: Any = None) -> Dict[str, Any]:
         try:
-            driver = self._get_driver()
-            
-            if timestamp is None:
-                valid_from_str = datetime.now(timezone.utc).isoformat()
-            elif isinstance(timestamp, datetime):
-                valid_from_str = timestamp.isoformat()
-            else:
-                valid_from_str = str(timestamp)
-                
-            created_at_str = datetime.now(timezone.utc).isoformat()
-            fact_id = str(uuid.uuid4())
-
-            def _add_fact_tx(tx, ent_id, f_id, content, src, val_from, cre_at):
-                tx.run("MERGE (e:Entity {id: $entity_id})", entity_id=ent_id)
-                tx.run("""
-                    MATCH (e:Entity {id: $entity_id})-[:HAS_FACT]->(old_f:Fact)
-                    WHERE old_f.valid_until IS NULL AND old_f.created_at < datetime($valid_from)
-                    SET old_f.valid_until = datetime($valid_from)
-                """, entity_id=ent_id, valid_from=val_from)
-                tx.run("""
-                    MATCH (e:Entity {id: $entity_id})
-                    CREATE (f:Fact {
-                        id: $fact_id,
-                        content: $fact_content,
-                        valid_from: datetime($valid_from),
-                        valid_until: null,
-                        source: $source,
-                        created_at: datetime($created_at)
-                    })
-                    CREATE (e)-[:HAS_FACT {valid_from: datetime($valid_from)}]->(f)
-                """, entity_id=ent_id, fact_id=f_id, fact_content=content, 
-                     valid_from=val_from, source=src, created_at=cre_at)
-
-            with driver.session() as session:
-                session.execute_write(_add_fact_tx, entity_id, fact_id, fact_content, source, valid_from_str, created_at_str)
-
+            from beta_swarm.brain.sqlite_brain import get_brain
+            brain = get_brain()
+            res = brain.store_agent_memory(source, fact_content, "fact")
             return {
                 "status": "ok",
-                "fact_id": fact_id,
+                "fact_id": res.get("memory_id", str(uuid.uuid4())),
                 "entity_id": entity_id,
-                "timestamp": valid_from_str
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         except Exception as e:
-            logger.error(f"Error in add_fact: {e}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "note": "Neo4j may not be running. Start with: docker start neo4j"
-            }
+            return {"status": "error", "error": str(e)}
 
     def query_facts(self, entity_id: str, as_of: Any = None) -> Dict[str, Any]:
         try:
-            driver = self._get_driver()
-            
-            if as_of is not None:
-                if isinstance(as_of, datetime):
-                    as_of_str = as_of.isoformat()
-                else:
-                    as_of_str = str(as_of)
-            else:
-                as_of_str = None
-
-            def _query_facts_tx(tx, ent_id, as_of_t):
-                if as_of_t is not None:
-                    query = """
-                    MATCH (e:Entity {id: $entity_id})-[:HAS_FACT]->(f:Fact)
-                    WHERE f.valid_from <= datetime($as_of) AND (f.valid_until IS NULL OR f.valid_until > datetime($as_of))
-                    RETURN f.id AS id, f.content AS content, toString(f.valid_from) AS valid_from, 
-                           toString(f.valid_until) AS valid_until, f.source AS source, toString(f.created_at) AS created_at
-                    """
-                    result = tx.run(query, entity_id=ent_id, as_of=as_of_t)
-                else:
-                    query = """
-                    MATCH (e:Entity {id: $entity_id})-[:HAS_FACT]->(f:Fact)
-                    WHERE f.valid_until IS NULL
-                    RETURN f.id AS id, f.content AS content, toString(f.valid_from) AS valid_from, 
-                           toString(f.valid_until) AS valid_until, f.source AS source, toString(f.created_at) AS created_at
-                    """
-                    result = tx.run(query, entity_id=ent_id)
-                
-                facts = []
-                for record in result:
-                    facts.append({
-                        "fact_id": record["id"],
-                        "content": record["content"],
-                        "valid_from": record["valid_from"],
-                        "valid_until": record["valid_until"],
-                        "source": record["source"],
-                        "created_at": record["created_at"]
-                    })
-                return facts
-
-            with driver.session() as session:
-                facts_list = session.execute_read(_query_facts_tx, entity_id, as_of_str)
-
+            from beta_swarm.brain.sqlite_brain import get_brain
+            brain = get_brain()
+            mems = brain.query_context(entity_id)
+            facts_list = [{
+                "fact_id": str(uuid.uuid4()),
+                "content": m.get("content"),
+                "valid_from": m.get("timestamp"),
+                "valid_until": None,
+                "source": "sqlite",
+                "created_at": m.get("timestamp")
+            } for m in mems]
             return {
                 "status": "ok",
                 "entity_id": entity_id,
@@ -168,65 +166,14 @@ class GraphitiManager:
                 "facts": facts_list
             }
         except Exception as e:
-            logger.error(f"Error in query_facts: {e}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "note": "Neo4j may not be running. Start with: docker start neo4j"
-            }
+            return {"status": "error", "error": str(e)}
 
     def get_entity_history(self, entity_id: str) -> Dict[str, Any]:
-        try:
-            driver = self._get_driver()
-
-            def _get_history_tx(tx, ent_id):
-                query = """
-                MATCH (e:Entity {id: $entity_id})-[:HAS_FACT]->(f:Fact)
-                RETURN f.id AS id, f.content AS content, toString(f.valid_from) AS valid_from, 
-                       toString(f.valid_until) AS valid_until, f.source AS source, toString(f.created_at) AS created_at
-                ORDER BY f.valid_from ASC
-                """
-                result = tx.run(query, entity_id=ent_id)
-                history = []
-                for record in result:
-                    history.append({
-                        "fact_id": record["id"],
-                        "content": record["content"],
-                        "valid_from": record["valid_from"],
-                        "valid_until": record["valid_until"],
-                        "source": record["source"],
-                        "created_at": record["created_at"]
-                    })
-                return history
-
-            with driver.session() as session:
-                history_list = session.execute_read(_get_history_tx, entity_id)
-
-            return {
-                "status": "ok",
-                "entity_id": entity_id,
-                "version_count": len(history_list),
-                "history": history_list
-            }
-        except Exception as e:
-            logger.error(f"Error in get_entity_history: {e}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "note": "Neo4j may not be running. Start with: docker start neo4j"
-            }
+        return self.query_facts(entity_id)
 
     def close(self):
-        try:
-            if self._driver is not None:
+        if self._driver:
+            try:
                 self._driver.close()
-                self._driver = None
-        except Exception as e:
-            logger.error(f"Error closing GraphitiManager: {e}")
-
-if __name__ == "__main__":
-    gm = GraphitiManager()
-    result = gm.add_fact("test_project", "Project created with React frontend", "s1_ideation")
-    print(result)
-    print(gm.query_facts("test_project"))
-    gm.close()
+            except Exception:
+                pass

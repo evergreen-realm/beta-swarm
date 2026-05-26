@@ -1,5 +1,5 @@
 from beta_swarm.agents.base import BaseAgent
-from beta_swarm.brain.kuzudb_manager import KuzuBrain
+from beta_swarm.brain.sqlite_brain import KuzuBrain
 
 class B1LocalBrainAgent(BaseAgent):
     def __init__(self):

@@ -1,0 +1,87 @@
+/* Beta Swarm Portfolio — style.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --accent: #7c3aed;
+  --accent-glow: rgba(124,58,237,0.4);
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --radius: 12px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+}
+
+/* NAV */
+section { padding: 80px 5% 80px; max-width: 1100px; margin: 0 auto; }
+h2 { font-size: 2rem; font-weight: 700; margin-bottom: 1.5rem;
+     background: linear-gradient(135deg, #e2e8f0, var(--accent));
+     -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* HERO */
+#hero {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  text-align: center; background: radial-gradient(ellipse at center, #1a0a2e 0%, var(--bg) 70%);
+  max-width: 100%; padding: 0 5%;
+}
+.hero-content h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 700; margin-bottom: 1rem; }
+.hero-content .accent { color: var(--accent); }
+.tagline { font-size: 1.25rem; color: var(--muted); margin-bottom: 2.5rem; }
+
+/* BUTTONS */
+.cta-btn {
+  display: inline-block; padding: 14px 36px; border-radius: 50px;
+  background: var(--accent); color: #fff; font-weight: 600; font-size: 1rem;
+  text-decoration: none; border: none; cursor: pointer;
+  box-shadow: 0 0 24px var(--accent-glow);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.cta-btn:hover { transform: translateY(-2px); box-shadow: 0 0 40px var(--accent-glow); }
+
+/* ABOUT */
+#about p { font-size: 1.1rem; color: var(--muted); max-width: 700px; }
+
+/* SKILLS */
+.skills-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.skill-badge {
+  padding: 8px 20px; border-radius: 50px;
+  background: var(--surface); border: 1px solid rgba(124,58,237,0.3);
+  font-size: 0.9rem; font-weight: 600; color: var(--accent);
+  transition: all 0.2s;
+}
+.skill-badge:hover { background: var(--accent); color: #fff; transform: scale(1.05); }
+
+/* PROJECTS */
+.projects-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 24px; }
+.project-card {
+  background: var(--surface); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius); padding: 28px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.project-card:hover { transform: translateY(-4px); border-color: var(--accent); }
+.project-card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--text); }
+.project-card p { color: var(--muted); font-size: 0.95rem; }
+
+/* CONTACT FORM */
+#contact-form { display: flex; flex-direction: column; gap: 16px; max-width: 600px; }
+#contact-form input, #contact-form textarea {
+  padding: 14px 18px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text); font-family: inherit; font-size: 1rem;
+  outline: none; transition: border-color 0.2s;
+}
+#contact-form input:focus, #contact-form textarea:focus { border-color: var(--accent); }
+.form-status { margin-top: 12px; font-size: 0.95rem; }
+.form-status.success { color: #22c55e; }
+.form-status.error { color: #ef4444; }
+
+/* FOOTER */
+footer { text-align: center; padding: 32px; color: var(--muted); border-top: 1px solid rgba(255,255,255,0.06); }

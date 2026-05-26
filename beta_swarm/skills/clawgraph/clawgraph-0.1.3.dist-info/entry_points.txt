@@ -1,0 +1,2 @@
+[console_scripts]
+clawgraph = clawgraph.cli:app

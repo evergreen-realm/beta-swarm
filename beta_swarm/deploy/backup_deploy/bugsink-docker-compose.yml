@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  bugsink:
+    image: bugsink/bugsink:latest
+    environment:
+      - BUGSINK_URL=http://localhost:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - bugsink-data:/data
+    networks:
+      - bugsink_network
+
+volumes:
+  bugsink-data:
+
+networks:
+  bugsink_network:
+    driver: bridge

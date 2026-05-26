@@ -1,0 +1,32 @@
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>
+    <h2>Beta Swarm</h2>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" data-target="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+        Dashboard
+    </a>
+    <a href="#" class="nav-item" data-target="build">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+        Build Mode
+    </a>
+    <a href="#" class="nav-item" data-target="skills">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+        Skills
+    </a>
+    <a href="#" class="nav-item" data-target="memory">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+        Memory Graph
+    </a>
+  </nav>
+  <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 8px;">
+    <button id="deploy-btn" class="btn primary" onclick="deployApp()">Deploy App</button>
+    <button id="evolve-btn" class="btn primary" onclick="evolveSwarm()">Evolve Swarm</button>
+    <button id="audit-btn" class="btn primary" onclick="securityAudit()">Security Audit</button>
+    <button id="abort-btn" class="btn" style="background-color: var(--danger); color: white;" onclick="abortAll()">Abort All</button>
+  </div>
+</aside>

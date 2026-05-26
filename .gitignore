@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env.local
+
+# Environment secrets — keep .env.example, never .env
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# SQLite DBs (runtime state — not source)
+*.db
+*.db-shm
+*.db-wal
+message_bus.db
+
+# Logs
+*.log
+logs/
+
+# Model weights / large binaries
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+*.pt
+*.pth
+*.ckpt
+whisper.cpp/
+models/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Build outputs
+gitnexus_index.json
+workspace/
+checkpoints/
+
+# Old backup dirs
+Beta_Swarnv2_OLD_BACKUP/
+backup/

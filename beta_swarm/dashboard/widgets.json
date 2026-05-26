@@ -1,0 +1,14 @@
+{
+    "widgets": [
+        {"id": "system_vitals", "enabled": true, "position": 1},
+        {"id": "pipeline_progress", "enabled": true, "position": 2},
+        {"id": "agent_fleet", "enabled": true, "position": 3},
+        {"id": "router_health", "enabled": true, "position": 4},
+        {"id": "docker_status", "enabled": true, "position": 5},
+        {"id": "event_stream", "enabled": true, "position": 6},
+        {"id": "memory_timeline", "enabled": true, "position": 7},
+        {"id": "mission_control", "enabled": true, "position": 8},
+        {"id": "skills_inventory", "enabled": true, "position": 9},
+        {"id": "three_orb", "enabled": true, "position": 10}
+    ]
+}

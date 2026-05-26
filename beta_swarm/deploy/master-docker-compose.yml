@@ -1,0 +1,195 @@
+version: "3.8"
+
+services:
+  # ============================================================
+  # BRAIN LAYER
+  # ============================================================
+
+  letta-server:
+    image: letta/letta:latest
+    container_name: letta
+    ports:
+      - "8283:8283"
+    environment:
+      - LETTA_PG_HOST=letta-postgres
+      - LETTA_PG_PORT=5432
+      - LETTA_PG_USER=letta
+      - LETTA_PG_PASSWORD=letta_pass
+      - LETTA_PG_DB=letta
+    volumes:
+      - letta_data:/var/lib/letta
+    depends_on:
+      - letta-postgres
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  letta-postgres:
+    image: pgvector/pgvector:pg17
+    container_name: letta-postgres
+    environment:
+      - POSTGRES_USER=letta
+      - POSTGRES_PASSWORD=letta_pass
+      - POSTGRES_DB=letta
+    volumes:
+      - letta_pg_data:/var/lib/postgresql/data
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  cognee:
+    image: cognee/cognee:latest
+    container_name: cognee
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=local
+      - GRAPH_DATABASE_PROVIDER=kuzu
+      - VECTOR_DB_PROVIDER=lancedb
+      - VECTOR_DB_URL=/data/lancedb
+      - LLM_PROVIDER=ollama
+      - LLM_MODEL=llama3.1:8b
+      - LLM_ENDPOINT=http://host.docker.internal:11434
+      - LLM_API_KEY=dummy
+      - EMBEDDING_PROVIDER=ollama
+      - EMBEDDING_MODEL=nomic-embed-text
+      - EMBEDDING_ENDPOINT=http://host.docker.internal:11434
+      - EMBEDDING_API_KEY=dummy
+      - EMBEDDING_DIMENSIONS=768
+      - HUGGINGFACE_TOKENIZER=nomic-ai/nomic-embed-text-v1.5
+    volumes:
+      - cognee_data:/data
+    depends_on:
+      - cognee-qdrant
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  cognee-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: cognee-qdrant
+    volumes:
+      - cognee_qdrant_data:/qdrant/storage
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  # ============================================================
+  # MONITORING LAYER
+  # ============================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=beta-swarm-admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  # ============================================================
+  # ERROR MONITORING
+  # ============================================================
+
+  bugsink:
+    image: bugsink/bugsink:latest
+    container_name: bugsink
+    ports:
+      - "8001:8000"
+    environment:
+      - SECRET_KEY=beta-swarm-bugsink-secret-key-2026
+      - DATABASE_URL=sqlite:////data/bugsink.db
+      - PORT=8000
+    volumes:
+      - bugsink_data:/data
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+  # ============================================================
+  # REVERSE PROXY
+  # ============================================================
+
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml
+    networks:
+      - beta-swarm
+    restart: unless-stopped
+
+volumes:
+  letta_data:
+  letta_pg_data:
+  cognee_data:
+  cognee_qdrant_data:
+  prometheus_data:
+  grafana_data:
+  uptime_kuma_data:
+  bugsink_data:
+
+networks:
+  beta-swarm:
+    driver: bridge

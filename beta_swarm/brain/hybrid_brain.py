@@ -1,4 +1,4 @@
-from beta_swarm.brain.kuzudb_manager import KuzuBrain
+from beta_swarm.brain.sqlite_brain import KuzuBrain
 from beta_swarm.brain.neo4j_manager import Neo4jBrain
 from beta_swarm.brain.obsidian_manager import ObsidianManager
 from typing import Dict, List, Optional

@@ -1,0 +1,71 @@
+{
+  "dashboard": {
+    "title": "Beta Swarm Overview",
+    "tags": ["beta-swarm"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active Agents",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(swarm_agent_active)",
+            "legendFormat": "Active"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "API Provider Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "swarm_api_provider_status",
+            "format": "table"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Pipeline Stages",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "swarm_pipeline_stage_duration_seconds",
+            "legendFormat": "{{stage}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(swarm_errors_total[5m])",
+            "legendFormat": "Errors/sec"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Brain Query Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "swarm_brain_query_duration_seconds",
+            "legendFormat": "p99"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "refresh": "10s"
+  }
+}

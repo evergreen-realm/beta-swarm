@@ -1,0 +1,34 @@
+{
+  "machines": {
+    "t490": {
+      "total_mb": 8192,
+      "reserved_mb": 3072,
+      "available_mb": 5120,
+      "threshold_percent": 85
+    },
+    "production": {
+      "total_mb": 40960,
+      "reserved_mb": 6144,
+      "available_mb": 34816,
+      "threshold_percent": 90
+    }
+  },
+  "ssh": {
+    "production_host": "production-machine.local",
+    "production_user": "admin",
+    "key_path": "~/.ssh/id_rsa"
+  },
+  "stagger": {
+    "container_start_delay_sec": 3,
+    "container_stop_delay_sec": 2,
+    "model_load_timeout_sec": 120
+  },
+  "brain_service_policy": {
+    "essential": ["letta", "kuzu_db", "traefik", "beta-swarm-core"],
+    "on_demand": ["neo4j", "cognee", "graphiti", "gitnexus-mcp"]
+  },
+  "model_policy": {
+    "max_simultaneous": 1,
+    "batch_max": 2
+  }
+}

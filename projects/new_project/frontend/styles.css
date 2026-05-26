@@ -1,0 +1,58 @@
+body {
+    background-color: #f5f5f5;
+    font-family: Arial, sans-serif;
+}
+
+.glassmorphism-container {
+    max-width: 800px;
+    margin: 40px auto;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+.header {
+    background-color: #333;
+    padding: 10px;
+    border-radius: 10px 10px 0 0;
+    color: #fff;
+}
+
+.header h1 {
+    font-size: 24px;
+    margin: 0;
+}
+
+.content {
+    padding: 20px;
+}
+
+.card {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.card h2 {
+    font-size: 18px;
+    margin-top: 0;
+}
+
+.card p {
+    font-size: 16px;
+    color: #666;
+}
+
+.footer {
+    background-color: #333;
+    padding: 10px;
+    border-radius: 0 0 10px 10px;
+    color: #fff;
+}
+
+.footer p {
+    margin: 0;
+}

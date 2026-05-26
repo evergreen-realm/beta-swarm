@@ -1,0 +1,14 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="swarmGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff006e;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <polygon points="100,20 170,60 170,140 100,180 30,140 30,60" fill="url(#swarmGradient)" stroke="#fff" stroke-width="2" />
+  <circle cx="100" cy="100" r="20" fill="#fff" />
+  <circle cx="65" cy="80" r="8" fill="#fff" />
+  <circle cx="135" cy="80" r="8" fill="#fff" />
+  <circle cx="100" cy="140" r="8" fill="#fff" />
+  <text x="50%" y="195" text-anchor="middle" font-family="Arial" font-size="12" fill="#fff">BETA SWARM v3.1</text>
+</svg>

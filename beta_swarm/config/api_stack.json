@@ -1,0 +1,14 @@
+{
+  "providers": [
+    {"name": "openrouter", "base_url": "https://openrouter.ai/api/v1", "api_key_env": "OPENROUTER_API_KEY", "rpm": 20, "rpd": 200, "model": "openai/gpt-3.5-turbo"},
+    {"name": "groq", "base_url": "https://api.groq.com/openai/v1", "api_key_env": "GROQ_API_KEY", "rpm": 100, "rpd": 14400, "model": "llama3-8b-8192"},
+    {"name": "cerebras", "base_url": "https://api.cerebras.ai/v1", "api_key_env": "CEREBRAS_API_KEY", "rpm": 60, "rpd": 60000, "model": "llama3.1-8b"},
+    {"name": "sambanova", "base_url": "https://api.sambanova.ai/v1", "api_key_env": "SAMBANOVA_API_KEY", "rpm": 60, "rpd": 60000, "model": "Meta-Llama-3.1-8B-Instruct"},
+    {"name": "google", "base_url": "https://generativelanguage.googleapis.com/v1beta", "api_key_env": "GOOGLE_API_KEY", "rpm": 60, "rpd": 1500, "model": "gemini-1.5-flash"},
+    {"name": "mistral", "base_url": "https://api.mistral.ai/v1", "api_key_env": "MISTRAL_API_KEY", "rpm": 60, "rpd": 1000000, "model": "mistral-small-latest"},
+    {"name": "cloudflare", "base_url": "https://api.cloudflare.com/client/v4/ai/run", "api_key_env": "CLOUDFLARE_API_KEY", "rpm": 60, "rpd": 10000, "model": "@cf/meta/llama-3.1-8b-instruct"},
+    {"name": "huggingface", "base_url": "https://api-inference.huggingface.co/models", "api_key_env": "HUGGINGFACE_API_KEY", "rpm": 50, "rpd": 300, "model": "meta-llama/Llama-3.1-8B-Instruct"},
+    {"name": "github", "base_url": "https://models.inference.ai.azure.com", "api_key_env": "GITHUB_TOKEN", "rpm": 10, "rpd": 150, "model": "Meta-Llama-3.1-8B-Instruct"},
+    {"name": "deepseek", "base_url": "https://api.deepseek.com/v1", "api_key_env": "DEEPSEEK_API_KEY", "rpm": 60, "rpd": 5000000, "model": "deepseek-chat"}
+  ]
+}

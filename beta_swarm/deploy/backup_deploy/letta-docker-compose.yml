@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  letta:
+    image: letta/letta:latest # Assuming official letta image
+    ports:
+      - "8001:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - letta_network
+
+networks:
+  letta_network:
+    driver: bridge

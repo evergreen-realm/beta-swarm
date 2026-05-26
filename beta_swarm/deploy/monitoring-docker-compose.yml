@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - beta-swarm # Managed by monitoring-docker-compose.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - beta-swarm # Managed by monitoring-docker-compose.yml
+    depends_on:
+      - prometheus
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - "3001:3001"
+    networks:
+      - beta-swarm # Managed by monitoring-docker-compose.yml
+
+volumes:
+  prometheus_data:
+    name: prometheus_data
+  grafana_data:
+    name: grafana_data
+  uptime_kuma_data:
+    name: uptime_kuma_data
+
+networks:
+  beta-swarm:
+    name: beta-swarm
+    external: true

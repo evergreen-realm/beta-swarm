@@ -1,0 +1,88 @@
+/* animations.css - High end keyframes and transition effects */
+
+@keyframes slide-in {
+    from {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes modal-fade {
+    from {
+        transform: scale(0.9) translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes pulse-red {
+    0% {
+        box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(248, 81, 73, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(248, 81, 73, 0);
+    }
+}
+
+@keyframes glow-pulse-green {
+    0% {
+        box-shadow: 0 0 5px rgba(63, 185, 80, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(63, 185, 80, 0.8);
+    }
+    100% {
+        box-shadow: 0 0 5px rgba(63, 185, 80, 0.5);
+    }
+}
+
+@keyframes glow-pulse-gold {
+    0% {
+        box-shadow: 0 0 5px rgba(255, 183, 3, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(255, 183, 3, 0.8);
+    }
+    100% {
+        box-shadow: 0 0 5px rgba(255, 183, 3, 0.5);
+    }
+}
+
+/* Page fade-ins */
+.fade-in {
+    animation: simple-fade 0.4s ease forwards;
+}
+
+@keyframes simple-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Ring Rotators */
+.rotate-cw {
+    animation: rot-cw 20s linear infinite;
+}
+
+.rotate-ccw {
+    animation: rot-ccw 25s linear infinite;
+}
+
+@keyframes rot-cw {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes rot-ccw {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-360deg); }
+}

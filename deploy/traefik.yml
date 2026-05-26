@@ -1,0 +1,55 @@
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@localhost
+      storage: /letsencrypt/acme.json
+      tlsChallenge: {}
+
+http:
+  routers:
+    letta-router:
+      rule: "Host(`letta.localhost`)"
+      service: letta-service
+      entryPoints: ["web"]
+    cognee-router:
+      rule: "Host(`cognee.localhost`)"
+      service: cognee-service
+      entryPoints: ["web"]
+    grafana-router:
+      rule: "Host(`grafana.localhost`)"
+      service: grafana-service
+      entryPoints: ["web"]
+    app-router:
+      rule: "Host(`app.localhost`)"
+      service: app-service
+      entryPoints: ["web"]
+
+  services:
+    letta-service:
+      loadBalancer:
+        servers:
+          - url: "http://letta-server:8283"
+    cognee-service:
+      loadBalancer:
+        servers:
+          - url: "http://cognee:8000"
+    grafana-service:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"
+    app-service:
+      loadBalancer:
+        servers:
+          - url: "http://app:8000"
+
+  middlewares:
+    rateLimit:
+      rateLimit:
+        average: 100
+        burst: 50

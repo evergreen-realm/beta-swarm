@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BETA SWARM | JARVIS HUD</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #050a0f;
+            --panel-bg: rgba(10, 25, 41, 0.7);
+            --cyan: #00f2ff;
+            --blue: #0077ff;
+            --orange: #ff9900;
+            --green: #00ff88;
+            --red: #ff3333;
+            --text: #e0f0ff;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(0, 119, 255, 0.1) 0%, transparent 80%),
+                linear-gradient(0deg, transparent 24%, rgba(0, 242, 255, 0.05) 25%, rgba(0, 242, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 242, 255, 0.05) 75%, rgba(0, 242, 255, 0.05) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(0, 242, 255, 0.05) 25%, rgba(0, 242, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 242, 255, 0.05) 75%, rgba(0, 242, 255, 0.05) 76%, transparent 77%, transparent);
+            background-size: 100% 100%, 50px 50px, 50px 50px;
+            color: var(--text);
+            font-family: var(--font-mono);
+            margin: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--cyan);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px var(--cyan);
+        }
+
+        h1 { margin: 0; font-size: 1.5rem; letter-spacing: 5px; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--panel-bg);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            border-radius: 4px;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover { transform: translateY(-5px); border-color: var(--cyan); }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 4px; height: 100%;
+            background: var(--cyan);
+        }
+
+        .card-title {
+            color: var(--cyan);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--cyan);
+            box-shadow: 0 0 10px var(--cyan);
+            transition: width 0.5s ease;
+        }
+
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+        }
+
+        .agent-node {
+            font-size: 0.6rem;
+            text-align: center;
+            padding: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .status-idle { color: var(--text); opacity: 0.5; }
+        .status-active { color: var(--cyan); font-weight: bold; }
+        .status-complete { color: var(--green); }
+        .status-error { color: var(--red); }
+
+        .log-box {
+            grid-column: span 2;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 0.7rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border: 1px solid rgba(0, 242, 255, 0.1);
+        }
+
+        .log-entry { margin-bottom: 4px; border-left: 2px solid var(--blue); padding-left: 5px; }
+
+        #orb-container {
+            width: 100%;
+            height: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .mission-control {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px;
+            background: rgba(0, 242, 255, 0.1);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .btn:hover { background: var(--cyan); color: black; }
+        .btn-red { border-color: var(--red); color: var(--red); }
+        .btn-red:hover { background: var(--red); color: white; }
+
+        .timeline-entry {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 0;
+            font-size: 0.75rem;
+        }
+
+        .timeline-date { color: var(--blue); font-size: 0.65rem; }
+
+        @media (max-width: 800px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .log-box { grid-column: span 1; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>BETA SWARM V3.1 // JARVIS OS</h1>
+        <div id="connection-status" style="color: var(--green)">ONLINE</div>
+    </header>
+
+    <div class="dashboard-grid">
+        <!-- 3D Heartbeat Orb -->
+        <div class="card">
+            <div class="card-title">Swarm Heartbeat <span>ORB_CORE</span></div>
+            <div id="orb-container"></div>
+        </div>
+
+        <!-- Mission Control -->
+        <div class="card">
+            <div class="card-title">Mission Control <span>COMMAND_CTR</span></div>
+            <div class="mission-control">
+                <button class="btn" onclick="triggerAction('deploy')">Deploy (S9)</button>
+                <button class="btn" onclick="triggerAction('evolve')">Evolve (B3)</button>
+                <button class="btn" onclick="triggerAction('audit')">Audit (S12)</button>
+                <button class="btn btn-red" onclick="triggerAction('abort')">ABORT ALL</button>
+            </div>
+            <div style="margin-top: 15px">
+                <input type="text" id="voice-input" placeholder="Enter JARVIS command..." style="width:100%; background:transparent; border:1px solid var(--blue); color:var(--text); padding:5px; font-size:0.7rem">
+            </div>
+        </div>
+
+        <!-- System Vitals -->
+        <div class="card">
+            <div class="card-title">System Vitals <span>CORE_MON</span></div>
+            <div id="system-metrics">
+                <div class="metric-row">CPU <span id="cpu-val">0%</span></div>
+                <div class="progress-bar"><div id="cpu-bar" class="progress-fill" style="width: 0%"></div></div>
+                <div class="metric-row" style="margin-top:10px">RAM <span id="ram-val">0%</span></div>
+                <div class="progress-bar"><div id="ram-bar" class="progress-fill" style="width: 0%"></div></div>
+            </div>
+        </div>
+
+        <!-- Memory Timeline -->
+        <div class="card" style="grid-row: span 2">
+            <div class="card-title">Memory Timeline <span>OBSIDIAN_V</span></div>
+            <div id="memory-timeline">
+                <!-- Entries loaded from collector -->
+            </div>
+        </div>
+
+        <!-- Agent Fleet -->
+        <div class="card" style="grid-row: span 2">
+            <div class="card-title">Agent Fleet <span>SWARM_72</span></div>
+            <div id="agent-grid" class="agent-grid">
+                <!-- Agents dynamically loaded -->
+            </div>
+        </div>
+
+        <!-- Skills Browser -->
+        <div class="card">
+            <div class="card-title">Skills Inventory <span>CAPABILITIES</span></div>
+            <div id="skills-list" style="font-size: 0.7rem">
+                <!-- Skills dynamically loaded -->
+            </div>
+        </div>
+
+        <!-- API Health -->
+        <div class="card">
+            <div class="card-title">Router Health <span>API_STACK</span></div>
+            <div id="router-health" style="font-size: 0.7rem">
+                <!-- Providers dynamically loaded -->
+            </div>
+        </div>
+
+        <!-- Terminal Logs -->
+        <div class="card log-box">
+            <div class="card-title">Event Stream <span>STDOUT</span></div>
+            <div id="log-stream">
+                <div class="log-entry">Dashboard initialized. Connecting to WebSocket...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/three_orb.js"></script>
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+        const logStream = document.getElementById('log-stream');
+        let orb;
+
+        window.onload = () => {
+            orb = new SwarmOrb('orb-container');
+        };
+        
+        function addLog(msg) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logStream.prepend(entry);
+            if (logStream.children.length > 50) logStream.lastChild.remove();
+        }
+
+        async function triggerAction(action) {
+            addLog(`Executing: ${action.toUpperCase()}`);
+            const resp = await fetch(`/api/mission/${action}`, { method: 'POST' });
+            const data = await resp.json();
+            addLog(`Response: ${JSON.stringify(data)}`);
+        }
+
+        document.getElementById('voice-input').onkeydown = async (e) => {
+            if (e.key === 'Enter') {
+                const cmd = e.target.value;
+                e.target.value = '';
+                addLog(`User: ${cmd}`);
+                await fetch('/api/jarvis/command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({command: cmd})
+                });
+            }
+        };
+
+        ws.onopen = () => {
+            document.getElementById('connection-status').textContent = 'ONLINE';
+            addLog('WebSocket connected.');
+        };
+
+        ws.onclose = () => {
+            document.getElementById('connection-status').textContent = 'OFFLINE';
+            document.getElementById('connection-status').style.color = 'var(--red)';
+            addLog('WebSocket disconnected.');
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            updateUI(data);
+        };
+
+        function updateUI(data) {
+            // System
+            document.getElementById('cpu-val').textContent = data.system.cpu_percent + '%';
+            document.getElementById('cpu-bar').style.width = data.system.cpu_percent + '%';
+            document.getElementById('ram-val').textContent = data.system.ram_percent + '%';
+            document.getElementById('ram-bar').style.width = data.system.ram_percent + '%';
+
+            // Orb heartbeat
+            if (orb) {
+                if (data.system.ram_percent > 90) orb.updateStatus('error');
+                else if (data.system.ram_percent > 70) orb.updateStatus('warning');
+                else orb.updateStatus('healthy');
+            }
+
+            // Agents
+            const agentGrid = document.getElementById('agent-grid');
+            agentGrid.innerHTML = '';
+            data.agents.forEach(agent => {
+                const node = document.createElement('div');
+                node.className = 'agent-node';
+                node.innerHTML = `<div>${agent.id}</div><div class="status-idle">${agent.role.split(':')[0]}</div>`;
+                agentGrid.appendChild(node);
+            });
+
+            // Timeline
+            const timelineDiv = document.getElementById('memory-timeline');
+            timelineDiv.innerHTML = '';
+            data.timeline.forEach(entry => {
+                const row = document.createElement('div');
+                row.className = 'timeline-entry';
+                row.innerHTML = `<div class="timeline-date">${entry.date}</div><div>${entry.title}</div><div style="font-size:0.6rem; opacity:0.7">${entry.summary}</div>`;
+                timelineDiv.appendChild(row);
+            });
+
+            // Skills
+            const skillsDiv = document.getElementById('skills-list');
+            skillsDiv.innerHTML = '';
+            data.skills.forEach(skill => {
+                const row = document.createElement('div');
+                row.className = 'metric-row';
+                row.innerHTML = `${skill.name} <span style="color:var(--green)">INSTALLED</span>`;
+                skillsDiv.appendChild(row);
+            });
+
+            // Router
+            const routerDiv = document.getElementById('router-health');
+            routerDiv.innerHTML = '';
+            for (const [name, stats] of Object.entries(data.router)) {
+                const row = document.createElement('div');
+                row.className = 'metric-row';
+                const color = stats.available ? 'var(--cyan)' : 'var(--red)';
+                row.innerHTML = `${name.toUpperCase()} <span style="color: ${color}">${stats.available ? 'OK' : 'FAIL'}</span>`;
+                routerDiv.appendChild(row);
+            }
+        }
+    </script>
+</body>
+</html>

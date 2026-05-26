@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  letta:
+    image: letta/letta:latest
+    ports:
+      - "8001:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - beta-swarm # Managed by letta-docker-compose.yml
+
+networks:
+  beta-swarm:
+    name: beta-swarm
+    external: true

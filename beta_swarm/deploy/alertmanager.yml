@@ -1,0 +1,10 @@
+route:
+  receiver: 'discord-webhook'
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+- name: 'discord-webhook'
+  webhook_configs:
+  - url: 'http://discord-webhook-url-placeholder'

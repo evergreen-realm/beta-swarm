@@ -1,0 +1,16 @@
+version: "3.8"
+
+networks:
+  beta-swarm:
+    driver: bridge
+
+volumes:
+  letta_data:
+  letta_pg_data:
+  cognee_data:
+  cognee_qdrant_data:
+  prometheus_data:
+  grafana_data:
+  uptime_kuma_data:
+  bugsink_data:
+  neo4j_data:

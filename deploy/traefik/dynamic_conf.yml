@@ -1,0 +1,57 @@
+http:
+  routers:
+    letta:
+      rule: "Host(`letta.beta-swarm.com`)"
+      entryPoints: ["websecure"]
+      service: "letta-service"
+      middlewares: ["api-ratelimit"]
+      tls:
+        certResolver: "letsencrypt"
+
+    cognee:
+      rule: "Host(`cognee.beta-swarm.com`)"
+      entryPoints: ["websecure"]
+      service: "cognee-service"
+      middlewares: ["api-ratelimit"]
+      tls:
+        certResolver: "letsencrypt"
+
+    grafana:
+      rule: "Host(`grafana.beta-swarm.com`)"
+      entryPoints: ["websecure"]
+      service: "grafana-service"
+      middlewares: ["api-ratelimit"]
+      tls:
+        certResolver: "letsencrypt"
+
+    app:
+      rule: "Host(`app.beta-swarm.com`)"
+      entryPoints: ["websecure"]
+      service: "app-service"
+      middlewares: ["api-ratelimit"]
+      tls:
+        certResolver: "letsencrypt"
+
+  middlewares:
+    api-ratelimit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+  services:
+    letta-service:
+      loadBalancer:
+        servers:
+          - url: "http://letta:8888"
+    cognee-service:
+      loadBalancer:
+        servers:
+          - url: "http://cognee:8000"
+    grafana-service:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"
+    app-service:
+      loadBalancer:
+        servers:
+          - url: "http://beta-swarm-core:8080"

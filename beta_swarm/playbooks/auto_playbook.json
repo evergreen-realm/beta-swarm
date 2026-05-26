@@ -1,0 +1,10 @@
+{
+  "database_connection_timeout": {
+    "count": 1,
+    "resolutions": [
+      "Increased pool connection size and retried"
+    ],
+    "first_seen": "2026-05-20T21:57:37.909610",
+    "last_seen": "2026-05-20T21:57:37.909610"
+  }
+}

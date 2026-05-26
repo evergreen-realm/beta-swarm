@@ -1,4 +1,4 @@
-from beta_swarm.brain.kuzudb_manager import get_brain
+from beta_swarm.brain.sqlite_brain import get_brain
 import datetime
 
 def init_schema():

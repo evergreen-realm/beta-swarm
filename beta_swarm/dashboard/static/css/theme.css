@@ -1,0 +1,49 @@
+/* theme.css - Design Token definitions */
+:root {
+    --bg-galaxy: #030008;
+    --glass-bg: rgba(10, 5, 20, 0.45);
+    --glass-bg-hover: rgba(20, 10, 40, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border-glow: rgba(168, 85, 247, 0.4);
+    
+    /* Harmonious tailer HSL palettes */
+    --primary: #9d4edd;
+    --primary-glow: rgba(157, 78, 221, 0.5);
+    --primary-muted: rgba(157, 78, 221, 0.2);
+    
+    --secondary: #2f81f7;
+    --secondary-glow: rgba(47, 129, 247, 0.5);
+    
+    /* Role colors */
+    --color-strategic: #00b4d8;  /* Blue */
+    --color-execution: #3fb950;  /* Green */
+    --color-bridge: #ffb703;     /* Gold */
+    --color-guardian: #f85149;   /* Red */
+    --color-sentry: #9b5de5;     /* Purple */
+    
+    /* Text colors */
+    --text-main: #f0f6fc;
+    --text-muted: #8b949e;
+    --text-link: #58a6ff;
+    
+    /* Layout */
+    --sidebar-width: 260px;
+    --header-height: 70px;
+    --border-radius: 12px;
+    --font-stack: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-galaxy);
+    color: var(--text-main);
+    font-family: var(--font-stack);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+}

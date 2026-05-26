@@ -1,5 +1,5 @@
 import logging
-from .kuzudb_manager import KuzuBrain
+from .sqlite_brain import KuzuBrain
 from .neo4j_manager import Neo4jBrain
 
 logger = logging.getLogger(__name__)

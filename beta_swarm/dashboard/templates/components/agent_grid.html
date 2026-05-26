@@ -1,0 +1,17 @@
+<div class="agent-grid" id="agent-grid">
+  {% for agent in agents %}
+  <div class="agent-card" id="agent-{{ agent.id }}">
+    <div class="agent-header">
+      <span class="agent-id">{{ agent.id }}</span>
+      <span class="agent-stage badge">{{ agent.stage }}</span>
+    </div>
+    <div class="agent-body">
+      <h3>{{ agent.name }}</h3>
+      <div class="agent-status">
+        <span class="status-dot {{ agent.status }}"></span>
+        {{ agent.status | capitalize }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>

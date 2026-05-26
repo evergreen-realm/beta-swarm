@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # -------------------------
+  # CORE CONTAINERS
+  # -------------------------
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 128m
+
+  neo4j:
+    image: neo4j:5.12.0
+    container_name: neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/betaswarm
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    mem_limit: 2048m
+
+  letta-postgres:
+    image: postgres:17-alpine
+    container_name: letta-postgres
+    environment:
+      - POSTGRES_USER=letta
+      - POSTGRES_PASSWORD=letta
+      - POSTGRES_DB=letta
+    ports:
+      - "5432:5432"
+    mem_limit: 256m
+
+  # -------------------------
+  # MONITORING BATCH
+  # -------------------------
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    volumes:
+      - ./uptime-kuma:/app/data
+    ports:
+      - "3001:3001"
+    mem_limit: 256m
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    mem_limit: 512m
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    mem_limit: 512m

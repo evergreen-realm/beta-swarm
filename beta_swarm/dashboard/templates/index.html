@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beta Swarm v3.2 - Master Swarm Console</title>
+    <!-- Google Fonts Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- D3.js library for Knowledge Graphs -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- CSS modular styling layers -->
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/galaxy.css">
+    <link rel="stylesheet" href="/static/css/animations.css">
+
+    <style>
+        /* Premium Custom Theme Overrides */
+        :root {
+            --font-mono: 'JetBrains Mono', monospace;
+            --font-outfit: 'Outfit', sans-serif;
+            --glass-border: rgba(0, 242, 255, 0.12);
+        }
+
+        /* 3D Animated CSS Orb logo styling */
+        .sidebar-logo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            position: relative;
+            margin-right: 8px;
+        }
+
+        .css-3d-orb {
+            position: relative;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform-style: preserve-3d;
+            animation: orbSpin 12s linear infinite;
+        }
+
+        .orb-core {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #ffffff 0%, #00f2ff 50%, #0077ff 100%);
+            box-shadow: 0 0 15px #00f2ff, 0 0 30px #0077ff;
+            animation: orbBreathe 2s ease-in-out infinite alternate;
+        }
+
+        .orb-ring {
+            position: absolute;
+            border: 1.5px solid rgba(0, 242, 255, 0.4);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            transform-style: preserve-3d;
+        }
+
+        .ring-1 { transform: rotateX(45deg) rotateY(45deg); border-color: rgba(0, 242, 255, 0.6); }
+        .ring-2 { transform: rotateX(-45deg) rotateY(45deg); border-color: rgba(0, 119, 255, 0.6); }
+        .ring-3 { transform: rotateX(90deg) rotateY(0deg); border-color: rgba(245, 158, 11, 0.4); }
+
+        @keyframes orbSpin {
+            0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+            100% { transform: rotateX(360deg) rotateY(360deg) rotateZ(360deg); }
+        }
+
+        @keyframes orbBreathe {
+            0% { transform: scale(0.9); box-shadow: 0 0 8px #00f2ff, 0 0 16px #0077ff; }
+            100% { transform: scale(1.1); box-shadow: 0 0 16px #00f2ff, 0 0 32px #0077ff; }
+        }
+
+        /* Split-screen Build Mode */
+        .build-split-layout {
+            display: grid;
+            grid-template-columns: 6fr 4fr;
+            gap: 20px;
+            height: calc(100vh - 120px);
+            overflow: hidden;
+        }
+
+        .build-left-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            overflow-y: auto;
+            padding-right: 8px;
+            height: 100%;
+        }
+
+        .build-right-terminal {
+            background: #030712;
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .build-terminal-header {
+            padding: 10px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--glass-border);
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+
+        .build-terminal-stream {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 16px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.6;
+            background: #02040a;
+        }
+
+        /* SVG Horizontal Pipeline Drawer */
+        .pipeline-flow-wrapper {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .details-drawer {
+            background: rgba(10, 20, 30, 0.95);
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            transform: translateY(20px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+
+        .details-drawer.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .drawer-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        /* Multi-tab Memory Vault */
+        .vault-tabs {
+            display: flex;
+            gap: 12px;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .vault-tab-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-family: var(--font-outfit);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .vault-tab-btn.active {
+            background: rgba(0, 242, 255, 0.1);
+            border-color: #00f2ff;
+            color: #ffffff;
+            box-shadow: 0 0 8px rgba(0,242,255,0.25);
+        }
+
+        .vault-pane {
+            display: none;
+        }
+
+        .vault-pane.active {
+            display: block;
+        }
+
+        /* Custom Sentry check indicator colors */
+        .sentry-check-pill {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Galaxy 2D Particle Canvas Background -->
+    <canvas id="galaxy-canvas"></canvas>
+
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div>
+                <div class="sidebar-header" style="margin-bottom:24px;">
+                    <!-- conically gradiented 3D animated CSS Orb logo -->
+                    <div class="sidebar-logo-container" onclick="openClusterModal()">
+                        <div class="css-3d-orb">
+                            <div class="orb-ring ring-1"></div>
+                            <div class="orb-ring ring-2"></div>
+                            <div class="orb-ring ring-3"></div>
+                            <div class="orb-core"></div>
+                        </div>
+                    </div>
+                    <span class="sidebar-title" style="letter-spacing:1.5px; font-weight:900;">BETA SWARM</span>
+                </div>
+                <nav class="sidebar-nav">
+                    <button class="nav-item active" onclick="switchView('overview-panel')">
+                        <span>🌌</span> Roster & Graph
+                    </button>
+                    <button class="nav-item" onclick="switchView('build-panel')">
+                        <span>⚙️</span> Build Mode
+                    </button>
+                    <button class="nav-item" onclick="switchView('skills-panel')">
+                        <span>🧩</span> Skills Marketplace
+                    </button>
+                    <button class="nav-item" onclick="switchView('memory-panel')">
+                        <span>🧠</span> Memory Vault
+                    </button>
+                    <button class="nav-item" onclick="switchView('preview-panel')">
+                        <span>💻</span> App Preview
+                    </button>
+                    <button class="nav-item" onclick="switchView('gates-panel')">
+                        <span>🔒</span> Sentry Gates
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Global Action Triggers -->
+            <div class="sidebar-footer">
+                <button class="btn primary" onclick="deployApp()">Deploy App</button>
+                <button class="btn" onclick="evolveSwarm()">Evolve Swarm</button>
+                <button class="btn" onclick="securityAudit()">Audit Gates</button>
+                <button class="btn danger" onclick="abortAll()">Panic Abort</button>
+            </div>
+        </aside>
+
+        <!-- Main Screen Workspace -->
+        <main class="main-content">
+            <header class="header">
+                <div class="header-title-container">
+                    <span class="header-subtitle" style="letter-spacing:1px;">Beta Swarm v3.2.0</span>
+                    <h1 style="font-size:20px; font-weight:900; font-family:'Outfit',sans-serif;">Master Swarm Console</h1>
+                </div>
+                
+                <!-- Command Center console input -->
+                <div class="command-center">
+                    <div class="command-input-container">
+                        <input type="text" id="command-center-input" class="command-input" placeholder="Broadcast swarm command (e.g. 'deploy client project')...">
+                        <button id="voice-trigger-btn" class="voice-btn" onclick="toggleVoiceRecording()">🎤</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- SPA VIEW PANELS -->
+            
+            <!-- VIEW 1: Overview & Graph (Split screen Roster workspace) -->
+            <section id="overview-panel" class="view-panel active">
+                <div class="galaxy-workspace">
+                    <!-- Upper screen workspace (Tabs) -->
+                    <div class="upper-workspace">
+                        <div class="workspace-tabs">
+                            <button class="tab-btn active" onclick="switchUpperTab('chat')">Dialogue Feed</button>
+                            <button class="tab-btn" onclick="switchUpperTab('brain')">Knowledge Brain Graph</button>
+                            <button class="tab-btn" onclick="switchUpperTab('pipeline')" onclick="renderPipelineFlow()">Horizontal Flow</button>
+                            <button class="tab-btn" onclick="switchUpperTab('preview')">Live Portal</button>
+                        </div>
+                        <div class="tab-content-container">
+                            <!-- Tab Content 1: Dialogue Feed -->
+                            <div id="tab-chat" class="tab-pane active">
+                                <div class="chat-container">
+                                    <div id="chat-history" class="chat-history"></div>
+                                    <div style="display:flex; gap:12px; border-top:1px solid var(--glass-border); padding-top:12px;">
+                                        <input type="text" id="chat-input" class="command-input" style="flex-grow:1;" placeholder="Chat with Swarm Sentry Watchdog..." onkeydown="if(event.key === 'Enter') submitChatMessage()">
+                                        <button class="btn primary" onclick="submitChatMessage()">Send</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Tab Content 2: D3 Graph -->
+                            <div id="tab-brain" class="tab-pane">
+                                <div id="brain-graph"></div>
+                            </div>
+                            <!-- Tab Content 3: Horizontal SVG Pipeline -->
+                            <div id="tab-pipeline" class="tab-pane">
+                                <div class="pipeline-flow-wrapper">
+                                    <div id="svg-pipeline-container"></div>
+                                    <div id="pipeline-details-drawer" class="details-drawer">
+                                        <div class="drawer-header">
+                                            <h4 id="drawer-title" style="font-family:'Outfit'; font-size:14px; font-weight:800; color:#00f2ff;">Layer Diagnostics</h4>
+                                            <button class="drawer-close" onclick="closePipelineDrawer()">×</button>
+                                        </div>
+                                        <div id="drawer-body" class="drawer-body" style="font-size:12px; color:var(--text-muted);">
+                                            Click any layer node to inspect pipeline checksum vitals.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Tab Content 4: Portal Preview -->
+                            <div id="tab-preview" class="tab-pane" style="padding:0;">
+                                <iframe style="width:100%; height:100%; border:none; background:#000;" src="about:blank"></iframe>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lower screen workspace (Agent roster 26 grid) -->
+                    <div class="lower-workspace">
+                        <div class="roster-header">
+                            <span class="roster-title">Active Swarm Entity Roster (26 Nodes)</span>
+                            <span style="font-size:11px; color:var(--text-muted);">strategic S1-13 (blue) | execution X1-4 (green) | bridge B1-4 (gold) | guardian G1-4 (red)</span>
+                        </div>
+                        <div id="agent-grid" class="agent-grid"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 2: Build Mode fluid panel (60/40 Split screen layout) -->
+            <section id="build-panel" class="view-panel">
+                <div class="build-split-layout fade-in">
+                    <!-- Left Split: Active Agent Cards -->
+                    <div class="build-left-grid" id="build-agent-grid"></div>
+                    
+                    <!-- Right Split: Terminals -->
+                    <div class="build-right-terminal">
+                        <div class="build-terminal-header">SWARM LIVE COMPILATION STREAM</div>
+                        <div id="build-log-stream" class="build-terminal-stream"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 3: Skills Marketplace -->
+            <section id="skills-panel" class="view-panel">
+                <div style="margin-bottom:16px;">
+                    <h2 style="font-size:18px; margin-bottom:4px;">Autonomous Skill Marketplace</h2>
+                    <p style="font-size:12px; color:var(--text-muted);">Expand agent actions by downloading skills directly from local repositories.</p>
+                </div>
+                <div id="skills-grid" class="skills-grid"></div>
+            </section>
+
+            <!-- VIEW 4: Multi-Tab Memory Vault -->
+            <section id="memory-panel" class="view-panel">
+                <div class="memory-vault-layout fade-in">
+                    <div style="margin-bottom:16px;">
+                        <h2 style="font-size:18px; margin-bottom:4px; font-family:'Outfit',sans-serif;">Multi-Dimensional Memory Vault</h2>
+                        <p style="font-size:12px; color:var(--text-muted);">Explore cross-layer semantic structures, recall notes, and temporal facts.</p>
+                    </div>
+                    <div class="vault-tabs">
+                        <button class="vault-tab-btn active" onclick="switchVaultTab('letta-core')">Letta Core</button>
+                        <button class="vault-tab-btn" onclick="switchVaultTab('letta-recall')">Obsidian Recall</button>
+                        <button class="vault-tab-btn" onclick="switchVaultTab('neo4j-archival')">Neo4j Archival</button>
+                        <button class="vault-tab-btn" onclick="switchVaultTab('cognee-kg')">Cognee KG</button>
+                        <button class="vault-tab-btn" onclick="switchVaultTab('graphiti-temporal')">Graphiti Temporal</button>
+                    </div>
+                    <div class="vault-content-pane">
+                        <div id="vault-letta-core" class="vault-pane active"></div>
+                        <div id="vault-letta-recall" class="vault-pane"></div>
+                        <div id="vault-neo4j-archival" class="vault-pane"></div>
+                        <div id="vault-cognee-kg" class="vault-pane"></div>
+                        <div id="vault-graphiti-temporal" class="vault-pane"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 5: App Preview sandbox -->
+            <section id="preview-panel" class="view-panel">
+                <div style="display:grid; grid-template-rows: 1fr 180px; height:100%; gap:20px;" class="fade-in">
+                    <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:12px; overflow:hidden; position:relative;">
+                        <iframe id="preview-iframe" style="width:100%; height:100%; border:none; background:#ffffff;" src="about:blank"></iframe>
+                        <button class="btn primary" style="position:absolute; top:20px; right:20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5);" onclick="triggerAssimilate()">Assimilate App</button>
+                    </div>
+                    <div style="background:rgba(5,2,10,0.85); border:1px solid var(--glass-border); border-radius:12px; display:flex; flex-direction:column; overflow:hidden;">
+                        <div style="padding:8px 16px; background:rgba(0,0,0,0.3); border-bottom:1px solid var(--glass-border); font-size:11px; font-weight:700; color:var(--text-muted);">Local Swarm deployment terminal log stream</div>
+                        <div id="preview-terminal" style="flex-grow:1; overflow-y:auto; padding:12px; font-family:monospace; font-size:12px; line-height:1.6; color:#a8ffb2;"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 6: Sentry Gates -->
+            <section id="gates-panel" class="view-panel">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <div>
+                        <h2 style="font-size:18px; margin-bottom:4px;">Triple-Gate Sentry Checkpoints</h2>
+                        <p style="font-size:12px; color:var(--text-muted);">Interactive gate locks protecting the production deployment pipeline.</p>
+                    </div>
+                    <!-- Settings Preferences trigger -->
+                    <button class="btn" onclick="openSettingsModal()">⚙️ Settings</button>
+                </div>
+                <div id="gates-container" style="display:flex; flex-direction:column; gap:16px;"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Agent Details Global Modal overlay -->
+    <div id="agent-modal" class="modal-overlay" onclick="if(event.target === this) closeAgentModal()">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-title" class="modal-title">Agent Configuration</h3>
+                <button class="modal-close" onclick="closeAgentModal()">×</button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Cluster Vitals Modal -->
+    <div id="cluster-modal" class="modal-overlay" onclick="if(event.target === this) closeClusterModal()">
+        <div class="modal-card" style="max-width:540px; border:1px solid rgba(0,242,255,0.3); background:rgba(6,11,20,0.95); backdrop-filter:blur(15px);">
+            <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,0.07); padding-bottom:12px;">
+                <h3 class="modal-title" style="color:#00f2ff; font-family:'Outfit',sans-serif; font-size:18px; font-weight:800;">🌌 EXO Mesh Cluster Diagnostics</h3>
+                <button class="modal-close" onclick="closeClusterModal()">×</button>
+            </div>
+            <div class="modal-body" style="padding-top:16px;">
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                        <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:10px; color:var(--text-muted);">ACTIVE COORDINATOR</div>
+                            <div style="font-weight:700; color:#a8ffb2;">EXOMESH ACTIVE</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:10px; color:var(--text-muted);">CLUSTER NODES</div>
+                            <div style="font-weight:700; color:#ffffff;">1 Active (local_lenny)</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); border-radius:8px; overflow:hidden; font-family:monospace; font-size:11px;">
+                        <div style="padding:8px 12px; background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05); font-weight:700;">Node: local_lenny (127.0.0.1:8998)</div>
+                        <div style="padding:12px; line-height:1.6; color:#e5e7eb;">
+                            Vitals: ONLINE (Ping: 4ms)<br/>
+                            RAM Capacity: 16.0 GB / 16.0 GB<br/>
+                            GPU Capacity: 4.0 GB / 4.0 GB (CUDA v12.1)<br/>
+                            Assigned Tasks: 0 active
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HITL Settings Modal -->
+    <div id="settings-modal" class="modal-overlay" onclick="if(event.target === this) closeSettingsModal()">
+        <div class="modal-card" style="max-width:440px; border:1px solid rgba(0,242,255,0.25); background:rgba(6,11,20,0.95); backdrop-filter:blur(15px);">
+            <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,0.07); padding-bottom:12px;">
+                <h3 class="modal-title" style="color:#00f2ff; font-family:'Outfit',sans-serif; font-size:16px; font-weight:800;">⚙️ HITL Governance Settings</h3>
+                <button class="modal-close" onclick="closeSettingsModal()">×</button>
+            </div>
+            <div class="modal-body" style="padding-top:16px;">
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; font-weight:600;">Auto-Approve on Timeout</span>
+                        <input type="checkbox" id="settings-auto-approve" style="width:16px; height:16px;" onchange="saveHitlSettings()">
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; font-weight:600;">Sentry Gate Strict Mode</span>
+                        <input type="checkbox" id="settings-strict-mode" style="width:16px; height:16px;" onchange="saveHitlSettings()">
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; font-weight:600;">Enable Vault Sync</span>
+                        <input type="checkbox" id="settings-vault-sync" style="width:16px; height:16px;" onchange="saveHitlSettings()">
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; margin-top:12px; border-top:1px solid rgba(255,255,255,0.07); padding-top:16px;">
+                        <button class="btn primary" onclick="closeSettingsModal()">Save & Sync</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Modal Trigger Helpers
+        function openClusterModal() {
+            const m = document.getElementById('cluster-modal');
+            if (m) m.style.display = 'flex';
+        }
+        function closeClusterModal() {
+            const m = document.getElementById('cluster-modal');
+            if (m) m.style.display = 'none';
+        }
+        function openSettingsModal() {
+            const m = document.getElementById('settings-modal');
+            if (m) {
+                m.style.display = 'flex';
+                // Load active settings
+                fetch(`${API_BASE}/settings`)
+                    .then(res => res.json())
+                    .then(data => {
+                        document.getElementById('settings-auto-approve').checked = data.settings.auto_approve_on_timeout;
+                        document.getElementById('settings-strict-mode').checked = data.settings.sentry_gate_strict_mode;
+                        document.getElementById('settings-vault-sync').checked = data.settings.vault_sync_enabled;
+                    });
+            }
+        }
+        function closeSettingsModal() {
+            const m = document.getElementById('settings-modal');
+            if (m) m.style.display = 'none';
+        }
+        function saveHitlSettings() {
+            const body = {
+                auto_approve_on_timeout: document.getElementById('settings-auto-approve').checked,
+                sentry_gate_strict_mode: document.getElementById('settings-strict-mode').checked,
+                vault_sync_enabled: document.getElementById('settings-vault-sync').checked
+            };
+            fetch(`${API_BASE}/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log('[Settings] Updated HITL parameters:', data);
+                localStorage.setItem('hitl_settings', JSON.stringify(body));
+            });
+        }
+    </script>
+
+    <!-- Modular Script Imports -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/websocket.js"></script>
+    <script src="/static/js/galaxy.js"></script>
+    <script src="/static/js/agents.js"></script>
+    <script src="/static/js/chat.js"></script>
+    <script src="/static/js/brain.js"></script>
+    <script src="/static/js/build.js"></script>
+    <script src="/static/js/skills.js"></script>
+    <script src="/static/js/memory.js"></script>
+    <script src="/static/js/preview.js"></script>
+    <script src="/static/js/gates.js"></script>
+    <script src="/static/js/exec.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
