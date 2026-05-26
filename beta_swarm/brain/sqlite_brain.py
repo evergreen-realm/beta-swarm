@@ -10,6 +10,11 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("beta_swarm.brain_manager")
 
+class QueryResult(list):
+    def get_as_df(self):
+        import pandas as pd
+        return pd.DataFrame(self)
+
 class SQLiteBrain:
     _instances = {}
     _lock = threading.Lock()
@@ -183,35 +188,116 @@ class SQLiteBrain:
         Shim for backwards compatibility with raw Cypher queries that still slip through.
         We capture them and attempt to safely translate to SQL, or gracefully no-op.
         """
-        logger.warning(f"Raw cypher query caught by SQLite shim: {query_str[:50]}")
-        class DummyResult:
-            def get_as_df(self):
-                import pandas as pd
-                return pd.DataFrame()
-        return DummyResult()
+        logger.warning(f"Raw cypher query caught by SQLite shim: {query_str[:100]}")
+        
+        # Clean query
+        q = query_str.strip().replace("\n", " ").replace("\t", " ")
+        import re
+        
+        # 1. MATCH (a:Agent) RETURN a.id, a.name, 'idle' as status, a.stage
+        # Or MATCH (a:Agent) RETURN a.id, a.name, a.stage, a.status
+        if "MATCH (a:Agent)" in q:
+            if "RETURN a.id, a.name, 'idle' as status, a.stage" in q or "status, a.stage" in q:
+                # Return list of tuples: (id, name, status, stage)
+                conn = self._get_conn()
+                try:
+                    cursor = conn.execute("SELECT id, name, status, stage FROM Agent")
+                    return QueryResult([tuple(row) for row in cursor.fetchall()])
+                except Exception as e:
+                    logger.error(f"Failed query MATCH (a:Agent): {e}")
+            elif "RETURN a.id, a.name, a.stage, a.status" in q or "stage, a.status" in q:
+                conn = self._get_conn()
+                try:
+                    cursor = conn.execute("SELECT id, name, stage, status FROM Agent")
+                    return QueryResult([tuple(row) for row in cursor.fetchall()])
+                except Exception as e:
+                    logger.error(f"Failed query MATCH (a:Agent): {e}")
+            else:
+                conn = self._get_conn()
+                try:
+                    cursor = conn.execute("SELECT id, name, stage, status FROM Agent")
+                    return QueryResult([tuple(row) for row in cursor.fetchall()])
+                except Exception as e:
+                    pass
+
+        # 2. MATCH (a:Agent {id: 'X'}) RETURN count(a)
+        m = re.search(r"MATCH\s*\(a:Agent\s*\{\s*id:\s*'([^']+)'\s*\}\)\s*RETURN\s*count\(a\)", q, re.IGNORECASE)
+        if m:
+            agent_id = m.group(1)
+            conn = self._get_conn()
+            try:
+                cursor = conn.execute("SELECT count(*) FROM Agent WHERE id = ?", (agent_id,))
+                row = cursor.fetchone()
+                val = row[0] if row else 0
+                return QueryResult([(val,)])
+            except Exception as e:
+                logger.error(f"Failed count query: {e}")
+                return QueryResult([(0,)])
+
+        # 3. MATCH (a) RETURN count(a) LIMIT 1
+        if "MATCH (a) RETURN count(a)" in q:
+            conn = self._get_conn()
+            try:
+                c_agents = conn.execute("SELECT count(*) FROM Agent").fetchone()[0]
+                c_memories = conn.execute("SELECT count(*) FROM Memory").fetchone()[0]
+                c_artifacts = conn.execute("SELECT count(*) FROM Artifact").fetchone()[0]
+                total = c_agents + c_memories + c_artifacts
+                return QueryResult([(total,)])
+            except Exception as e:
+                return QueryResult([(0,)])
+
+        # 4. MATCH (ag:Agent {id: 'X'}), (ar:Artifact {id: 'Y'}) CREATE (ag)-[:PRODUCED]->(ar)
+        m_create = re.search(r"MATCH\s*\(ag:Agent\s*\{\s*id:\s*'([^']+)'\s*\}\),\s*\(ar:Artifact\s*\{\s*id:\s*'([^']+)'\s*\}\)\s*CREATE", q, re.IGNORECASE)
+        if m_create:
+            agent_id = m_create.group(1)
+            artifact_id = m_create.group(2)
+            if not self.read_only:
+                conn = self._get_conn()
+                try:
+                    with conn:
+                        conn.execute("INSERT OR IGNORE INTO GENERATED (agent_id, artifact_id) VALUES (?, ?)", (agent_id, artifact_id))
+                    return QueryResult()
+                except Exception as e:
+                    logger.error(f"Failed CREATE relationship query: {e}")
+            return QueryResult()
+
+        return QueryResult()
 
     def sync_queue(self) -> Dict[str, Any]:
         return {"status": "success", "synced": 0, "message": "Queue obsolete with WAL SQLite mode."}
 
-    def store_artifact(self, agent_id: str, project: str, stage: str, data: str) -> Dict[str, Any]:
-        """Store a generated artifact and link it to the agent."""
+    def store_artifact(self, agent_id: str, project: str, stage: str = "Unknown", data: Optional[str] = None) -> Dict[str, Any]:
+        """Store a generated artifact and link it to the agent, with 3/4 argument signature fallback."""
         if self.read_only:
             return {"status": "ignored"}
+        
+        # Determine parameter mapping (due to legacy 3-argument call: store_artifact(project, agent_id, data))
+        if data is None:
+            real_data = stage
+            real_stage = "Unknown"
+            real_agent_id = project
+            real_project = agent_id
+        else:
+            real_data = data
+            real_stage = stage
+            real_agent_id = agent_id
+            real_project = project
+
         try:
-            artifact_id = f"art_{agent_id}_{int(time.time())}"
+            artifact_id = f"art_{real_agent_id}_{int(time.time())}"
             conn = self._get_conn()
             with conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO Artifact (id, project, stage, data, created_at) VALUES (?, ?, ?, ?, ?)",
-                    (artifact_id, project, stage, data, time.time())
+                    (artifact_id, real_project, real_stage, real_data, time.time())
                 )
                 conn.execute(
                     "INSERT OR IGNORE INTO GENERATED (agent_id, artifact_id) VALUES (?, ?)",
-                    (agent_id, artifact_id)
+                    (real_agent_id, artifact_id)
                 )
             return {"status": "success", "artifact_id": artifact_id}
         except Exception as e:
-            logger.error(f"Error storing artifact for {agent_id}: {e}")
+            logger.error(f"Error storing artifact for {real_agent_id}: {e}")
             return {"status": "error", "message": str(e)}
 
     def get_agent_by_id(self, agent_id: str) -> Dict[str, Any]:
