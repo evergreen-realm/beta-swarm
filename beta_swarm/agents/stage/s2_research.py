@@ -1,135 +1,186 @@
 from beta_swarm.agents.base import BaseAgent
+import json, re, os, logging
 from typing import Dict, Any, List
-import requests
-import logging
 
 logger = logging.getLogger(__name__)
-from beta_swarm.tools.web.browser_tool import BrowserTool
-from beta_swarm.tools.web.gumloop_tool import GumloopTool
 
 class S2ResearchAgent(BaseAgent):
     def __init__(self, brain=None):
         super().__init__("s2_research", "Research Agent", "Stage 2: Deep Research", brain)
-        self.browser = BrowserTool()
-        self.gumloop = GumloopTool(headless=True)
+
+    def _get_default_next_stage(self):
+        return "s3_prd"
 
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        concept = task.get("concept", {})
-        query = task.get("query", "") or concept.get("title", "") or "AI web applications"
-        depth = task.get("depth", "standard")
-        
-        # Try Gumloop web first
-        try:
-            from beta_swarm.orchestration.gumloop_web import GumloopWebManager
-            gumloop = GumloopWebManager()
-            result = gumloop.run_research(query, depth)
-            if result.get("findings"):
-                # Ingest into brain
-                bp = getattr(self, "brain_pipeline", None)
-                if not bp:
-                    try:
-                        from beta_swarm.brain.brain_pipeline import BrainPipeline
-                        bp = BrainPipeline()
-                    except Exception:
-                        pass
-                
-                if bp:
-                    from beta_swarm.brain.brain_pipeline import Artifact
-                    artifact = Artifact(
-                        artifact_type="research",
-                        project_id=task.get("project_id", "unknown"),
-                        content=result["findings"],
-                        source_agent="s2_research"
-                    )
-                    bp.ingest(artifact)
-                    
-                return {
-                    "status": "complete",
-                    "research_summary": result["findings"],
-                    "sources": result.get("sources", []),
-                    "technologies": result.get("technologies", []),
-                    "confidence": result.get("confidence", 0.8),
-                    "via": "gumloop_web",
-                    "next_stage": "s3_prd"
-                }
-        except Exception as e:
-            logger.warning(f"GumloopWebManager run_research failed: {e}. Falling back...")
-            
-        return self._local_research(task)
+        project_id = task.get("project_id", "default")
+        # Input from S1
+        s1_out = task.get("s1_ideation", {})
+        concept = s1_out.get("concept") or task.get("concept") or {}
+        query = task.get("query", "") or concept.get("title", "") or str(concept)[:200] or "software best practices"
+        depth = task.get("depth", "simple")
 
-    def _local_research(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        concept = task.get("concept", {})
-        queries = self._generate_queries(concept)
+        self._log_handover(f"S2 started. Query='{query}', depth={depth}")
 
-        research_results = []
-        for query in queries:
-            web_results = self._search_web(query)
-            research_results.extend(web_results)
+        raw_results = []
+        sources = []
 
-        summary = self._summarize(research_results)
+        # Three-tier research based on depth
+        if depth in ("simple", "standard"):
+            raw_results, sources = self._ddg_search(query)
+        elif depth == "medium":
+            raw_results, sources = self._openclaw_search(query)
+        else:  # edge / deep
+            raw_results, sources = self._parallel_web_search(query, concept)
 
-        if self.brain:
-            self.brain.store_fact(self.agent_id, f"Research: {len(research_results)} sources for {concept.get('title')}", "research")
+        # Fallback chain
+        if not raw_results:
+            raw_results, sources = self._ddg_search(query)
+        if not raw_results:
+            raw_results = [{"title": query, "snippet": f"Research on: {query}", "url": ""}]
+
+        # Summarise via LLM
+        context_text = "\n".join([
+            f"Source: {r.get('url','')}\nTitle: {r.get('title','')}\nSnippet: {r.get('snippet','')}"
+            for r in raw_results[:10]
+        ])
+        summary_prompt = f"""You are a technical research analyst.
+Summarise the following research into a concise technical overview for: "{query}"
+
+Research Data:
+{context_text}
+
+Return a JSON object:
+{{
+  "research_summary": "Multi-paragraph technical summary",
+  "key_findings": ["finding 1", "finding 2"],
+  "technologies": ["tech1", "tech2"],
+  "architecture_patterns": ["pattern1"],
+  "sources": []
+}}"""
+
+        llm_output = self._call_llm(summary_prompt, task_type="s2_research")
+        parsed = self._safe_parse_json(llm_output)
+        if not parsed:
+            parsed = {
+                "research_summary": "\n".join([r.get("snippet", "") for r in raw_results[:5]]),
+                "key_findings": [],
+                "technologies": [],
+                "architecture_patterns": [],
+                "sources": sources
+            }
+        parsed["sources"] = sources
+
+        # Save artifact + Obsidian
+        os.makedirs(f"./projects/{project_id}", exist_ok=True)
+        artifact_path = f"./projects/{project_id}/s2_research_output.json"
+        with open(artifact_path, "w", encoding="utf-8") as f:
+            json.dump(parsed, f, indent=2)
+
+        # Write Markdown report
+        md_path = f"./projects/{project_id}/research.md"
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(f"# Research Report: {query}\n\n")
+            f.write(parsed.get("research_summary", ""))
+            f.write("\n\n## Sources\n")
+            for s in sources[:20]:
+                f.write(f"- {s}\n")
+
+        self._save_to_obsidian(query, parsed.get("research_summary", ""), sources)
+        self._log_handover(f"S2 completed. {len(sources)} sources. Artifact: {artifact_path}")
 
         return {
             "status": "complete",
-            "research_summary": summary,
-            "sources": research_results[:20],
-            "next_stage": "s3_prd"
+            "research_summary": parsed.get("research_summary", ""),
+            "sources": sources,
+            "key_findings": parsed.get("key_findings", []),
+            "technologies": parsed.get("technologies", []),
+            "artifact": parsed,
+            "artifact_path": artifact_path,
+            "next_stage": task.get("next_stage") or self._get_default_next_stage()
         }
 
-    def _generate_queries(self, concept: Dict) -> List[str]:
-        title = concept.get("title", "")
-        features = concept.get("key_features", [])
-        queries = [
-            f"{title} best practices 2026",
-            f"{title} similar projects open source",
-            f"{title} architecture patterns"
-        ]
-        for feat in features[:3]:
-            queries.append(f"{feat} implementation approaches")
-        return queries
-
-    def _search_web(self, query: str) -> List[Dict]:
-        if query.startswith("http://") or query.startswith("https://"):
-            logger.info(f"Directly scraping URL: {query}")
-            content = self.browser.sync_fetch_page_content(query)
-            return [{"title": content.get("title", "Scraped Page"), "url": query, "snippet": content.get("text", "")[:500]}]
-
+    def _ddg_search(self, query: str) -> tuple:
+        results, sources = [], []
         try:
             from duckduckgo_search import DDGS
             with DDGS() as ddgs:
-                results = list(ddgs.text(query, max_results=5))
-                return [{"title": r["title"], "url": r["href"], "snippet": r["body"]} for r in results]
+                hits = list(ddgs.text(query, max_results=8))
+            for r in hits:
+                results.append({"title": r.get("title",""), "snippet": r.get("body",""), "url": r.get("href","")})
+                if r.get("href"):
+                    sources.append(r["href"])
+            logger.info(f"[S2] DuckDuckGo: {len(results)} results")
         except Exception as e:
-            logger.warning(f"DuckDuckGo search failed: {e}. Trying OpenClaw fallback...")
-            try:
-                from beta_swarm.orchestration.openclaw import OpenClaw
-                oc = OpenClaw()
-                oc_res = oc.search_and_navigate(query)
-                if oc_res.get("status") == "complete":
-                    return [{"title": r.get("title", "OpenClaw Result"), "url": r.get("url", ""), "snippet": r.get("description", "")} for r in oc_res.get("results", [])]
-            except Exception as oc_err:
-                logger.warning(f"OpenClaw fallback search failed: {oc_err}")
-            return [{"title": f"Search failed: {e}", "url": "", "snippet": f"Query: {query}"}]
+            logger.warning(f"[S2] DuckDuckGo failed: {e}")
+        return results, sources
 
-    def _summarize(self, results: List[Dict]) -> str:
-        """Uses LLM to synthesize search results into a concise technical summary."""
-        if not results:
-            return "No research results found."
-            
-        context = "\n".join([f"Source: {r['url']}\nSnippet: {r['snippet']}" for r in results[:10]])
-        prompt = f"""
-        Summarize the following research snippets into a coherent technical overview.
-        
-        FOCUS:
-        - Common architecture patterns for this type of project.
-        - Core API functionalities and data structures used by competitors.
-        - Technical challenges and recommended solutions.
-        - Suggest exact method/function signatures that would be part of a real implementation.
-        
-        RESEARCH DATA:
-        {context}
-        """
-        
-        return self.call_llm([{"role": "user", "content": prompt}])
+    def _openclaw_search(self, query: str) -> tuple:
+        try:
+            from beta_swarm.orchestration.openclaw import OpenClaw
+            oc = OpenClaw()
+            res = oc.search_and_navigate(query, max_results=5)
+            if res.get("status") == "complete":
+                results = [{"title": r.get("title",""), "snippet": r.get("description",""), "url": r.get("url","")} for r in res.get("results", [])]
+                sources = [r.get("url","") for r in res.get("results", []) if r.get("url")]
+                logger.info(f"[S2] OpenClaw: {len(results)} results")
+                return results, sources
+        except Exception as e:
+            logger.warning(f"[S2] OpenClaw failed: {e}")
+        return self._ddg_search(query)
+
+    def _parallel_web_search(self, query: str, concept: dict) -> tuple:
+        all_results, all_sources = [], []
+        # Generate subtopics from concept
+        features = concept.get("key_features", [])
+        subtopics = [query] + [f"{query} {feat}" for feat in features[:3]]
+        try:
+            from beta_swarm.tools.web.parallel_web_client import ParallelWebClient
+            client = ParallelWebClient()
+            for topic in subtopics:
+                res = client.search(topic)
+                all_results.extend(res.get("results", []))
+                all_sources.extend(res.get("sources", []))
+            logger.info(f"[S2] Parallel Web: {len(all_results)} results from {len(subtopics)} subtopics")
+        except Exception as e:
+            logger.warning(f"[S2] ParallelWebClient failed: {e}. Falling back to Gumloop.")
+            try:
+                from beta_swarm.orchestration.gumloop_web import GumloopWebManager
+                gm = GumloopWebManager()
+                tasks = [{"query": t, "depth": "deep"} for t in subtopics]
+                for t in tasks:
+                    res = gm.run_research(t["query"], t["depth"])
+                    if res.get("findings"):
+                        all_results.append({"title": t["query"], "snippet": res["findings"][:500], "url": ""})
+                        all_sources.extend(res.get("sources", []))
+            except Exception as e2:
+                logger.warning(f"[S2] Gumloop also failed: {e2}")
+                return self._ddg_search(query)
+        return all_results, list(set(all_sources))
+
+    def _save_to_obsidian(self, query: str, summary: str, sources: list):
+        try:
+            vault_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "obsidian-vault", "04-Research")
+            os.makedirs(vault_path, exist_ok=True)
+            safe_name = re.sub(r'[^\w\s-]', '', query)[:50].strip()
+            note_path = os.path.join(vault_path, f"{safe_name}.md")
+            with open(note_path, "w", encoding="utf-8") as f:
+                f.write(f"# {query}\n\n{summary}\n\n## Sources\n")
+                for s in sources[:10]:
+                    f.write(f"- {s}\n")
+        except Exception as e:
+            logger.warning(f"[S2] Obsidian save failed (non-fatal): {e}")
+
+    def _safe_parse_json(self, text: str) -> dict:
+        m = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(1).strip())
+            except Exception:
+                pass
+        m2 = re.search(r'\{.*\}', text, re.DOTALL)
+        if m2:
+            try:
+                return json.loads(m2.group(0))
+            except Exception:
+                pass
+        return {}

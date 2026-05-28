@@ -36,10 +36,21 @@ class RateLimiter:
         self.last_call = time.time()
 
 class APIRouter:
-    def __init__(self):
-        self.keys = get_available_keys()
+    def __init__(self, api_keys: Optional[Dict[str, str]] = None):
+        if api_keys is not None:
+            self.keys = api_keys
+        else:
+            self.keys = get_available_keys()
         self.limiters: Dict[str, RateLimiter] = {}
         self._init_limiters()
+
+    def route_request(self, task_type: str, prompt: str, preferred: Optional[str] = None) -> Dict:
+        messages = [{"role": "user", "content": prompt}]
+        result = self.call(messages, preferred=preferred)
+        if result.get("status") == "complete":
+            return result.get("response", {})
+        else:
+            return {"error": result.get("message", "unknown error")}
 
     def _init_limiters(self):
         for provider, config in API_CONFIG.items():
@@ -113,11 +124,30 @@ class APIRouter:
         try:
             if provider == "google_ai_studio":
                 return self._call_gemini(config, messages, headers)
+            elif provider == "lm_studio_local":
+                return self._call_lm_studio(config, messages, headers, temperature, max_tokens)
             else:
                 return self._call_openai_compatible(config, messages, headers, temperature, max_tokens)
         except Exception as e:
             logger.warning(f"Provider {provider} failed: {e}")
             return {"status": "error", "provider": provider, "message": str(e)}
+
+    def _call_lm_studio(self, config: Dict, messages: List[Dict],
+                        headers: Dict, temperature: float, max_tokens: int) -> Dict:
+        resp = requests.post(
+            f"{config['base_url']}/chat/completions",
+            headers={"Content-Type": "application/json"},
+            json={
+                "model": config["models"][0],
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            },
+            timeout=120
+        )
+        if resp.status_code == 200:
+            return {"status": "complete", "provider": "lm_studio_local", "response": resp.json()}
+        return {"status": "error", "provider": "lm_studio_local", "code": resp.status_code, "message": resp.text}
 
     def _call_openai_compatible(self, config: Dict, messages: List[Dict],
                                  headers: Dict, temperature: float, max_tokens: int) -> Dict:

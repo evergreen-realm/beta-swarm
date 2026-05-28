@@ -81,12 +81,28 @@ API_CONFIG: Dict[str, Dict[str, Any]] = {
         "limits": {"rpm": 60, "rpd": 5000000},
         "use_for": ["reasoning", "coding", "math"],
     },
+    "lm_studio_local": {
+        "base_url": "http://localhost:1234/v1",
+        "key_env": None,
+        "models": [
+            "qwen2-7b-instruct",
+            "deepseek-r1-distill-qwen-7b",
+            "llama-3.2-3b-instruct",
+            "nomic-embed-text"
+        ],
+        "limits": {"rpm": 60, "rpd": 1000000},
+        "use_for": ["embedding", "fast_inference", "reasoning"]
+    }
 }
 
 def get_available_keys() -> Dict[str, str]:
     keys = {}
     for provider, config in API_CONFIG.items():
-        key = os.getenv(config["key_env"])
+        key_env = config["key_env"]
+        if key_env is None:
+            keys[provider] = "local"
+            continue
+        key = os.getenv(key_env)
         if key:
             keys[provider] = key
     return keys
@@ -97,3 +113,13 @@ def get_provider_for_task(task_type: str) -> list:
         if task_type in config.get("use_for", []):
             suitable.append(provider)
     return suitable
+
+
+class RouterConfig:
+    """Wrapper class for API router configuration dictionary."""
+    def __init__(self, config_dict=None):
+        self.config = config_dict or API_CONFIG
+
+    @classmethod
+    def get_default(cls):
+        return cls(API_CONFIG)

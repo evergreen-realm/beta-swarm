@@ -1,75 +1,94 @@
 from beta_swarm.agents.base import BaseAgent
-from typing import Dict, Any, List
+import json, re, os
+from typing import Dict, Any
 
 class S4ArchitectureAgent(BaseAgent):
     def __init__(self, brain=None):
         super().__init__("s4_architecture", "Architecture Agent", "Stage 4: System Design", brain)
 
+    def _get_default_next_stage(self):
+        return "s5_backend"
+
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        project_id = task.get("project_id", "default")
         s3_out = task.get("s3_prd", {})
         prd = s3_out.get("prd") or task.get("prd") or {}
-        blueprint = prd.get("blueprint", {})
+        domain = task.get("business_domain", "general")
 
-        prompt = f"""
-        Design a detailed system architecture for the project "{prd.get('metadata', {}).get('title')}".
-        
-        PRD BLUEPRINT:
-        - DATA SCHEMA: {blueprint.get('data_schema')}
-        - API SPEC: {blueprint.get('api_spec')}
-        - COMPONENTS: {blueprint.get('components')}
-        
-        Generate a JSON structure with:
-        - diagram_type: "c4"
-        - components: List of service components with tech details.
-        - data_flow: List of interactions between components.
-        - api_contracts: Detailed list of endpoints, methods, and auth requirements.
-        - database_schema: Finalized table structures and field types.
-        - infrastructure: Docker, proxy, and monitoring configuration.
-        - security_model: Auth and data protection details.
-        
-        NO STUBS. Ensure the architecture matches the specific blueprint provided.
-        """
+        self._log_handover(f"S4 started. Project={project_id}")
 
-        llm_response = self.call_llm([{"role": "user", "content": prompt}], max_tokens=2048)
-        
-        # Simple extraction (assuming LLM returns JSON or we can parse it)
-        # For now, we'll store the full response as the architecture description
-        # Robust fallbacks for components and data flows
-        components = self._parse_list(llm_response, "components")
-        if not components or len(components) < 4:
-            components = self._generate_default_components()
-            
-        data_flow = self._parse_list(llm_response, "data_flow")
-        if not data_flow:
-            data_flow = self._generate_default_data_flow()
+        prompt = f"""You are the Architecture Agent. Design a complete system architecture.
 
-        architecture = {
-            "description": llm_response,
-            "components": components,
-            "data_flow": data_flow,
-            "api_contracts": self._parse_field(llm_response, "api_contracts") or "contracts: standard",
-            "database_schema": self._parse_field(llm_response, "database_schema") or "schema: standard",
-            "infrastructure": self._parse_field(llm_response, "infrastructure") or "infra: standard",
-            "security_model": self._parse_field(llm_response, "security_model") or "security: standard"
+PRD:
+{json.dumps(prd, indent=2)[:3000]}
+
+Domain: {domain}
+
+Return ONLY a JSON object:
+{{
+  "system_overview": "Description of the overall system",
+  "components": [
+    {{"name": "API Gateway", "type": "service", "tech": "FastAPI", "port": 8000}},
+    {{"name": "Database", "type": "storage", "tech": "PostgreSQL", "port": 5432}},
+    {{"name": "Frontend", "type": "web", "tech": "React", "port": 3000}}
+  ],
+  "data_flow": "Client -> API Gateway -> Services -> Database",
+  "api_contracts": [
+    {{"endpoint": "/api/v1/items", "method": "GET", "auth": "JWT", "returns": "list"}},
+    {{"endpoint": "/api/v1/items", "method": "POST", "auth": "JWT", "body": "item_data"}}
+  ],
+  "database_schema": [
+    {{"table": "items", "columns": [{{"name": "id", "type": "UUID", "pk": true}}, {{"name": "title", "type": "VARCHAR(255)"}}, {{"name": "user_id", "type": "UUID"}}]}}
+  ],
+  "infrastructure": {{"containerization": "Docker Compose", "reverse_proxy": "Nginx", "monitoring": "Prometheus"}},
+  "security_model": {{"auth": "JWT", "tls": true, "secrets_management": "env vars"}}
+}}"""
+
+        llm_output = self._call_llm(prompt, task_type="s4_architecture")
+        parsed = self._safe_parse_json(llm_output)
+
+        if not parsed or not parsed.get("components"):
+            parsed = {
+                "system_overview": f"Microservices architecture for {prd.get('metadata', {}).get('title', 'project')}",
+                "components": [
+                    {"name": "FastAPI Backend", "type": "service", "tech": "FastAPI/Python", "port": 8000},
+                    {"name": "SQLite DB", "type": "storage", "tech": "SQLite", "port": None},
+                    {"name": "React Frontend", "type": "web", "tech": "React", "port": 3000}
+                ],
+                "data_flow": "Browser -> FastAPI -> SQLite",
+                "api_contracts": [
+                    {"endpoint": "/api/v1/items", "method": "GET", "auth": "JWT", "returns": "list"},
+                    {"endpoint": "/api/v1/items", "method": "POST", "auth": "JWT", "body": "item_data"},
+                    {"endpoint": "/api/v1/items/{id}", "method": "PUT", "auth": "JWT", "body": "item_data"},
+                    {"endpoint": "/api/v1/items/{id}", "method": "DELETE", "auth": "JWT"}
+                ],
+                "database_schema": [{"table": "items", "columns": [{"name": "id", "type": "UUID"}, {"name": "title", "type": "VARCHAR"}, {"name": "user_id", "type": "UUID"}, {"name": "status", "type": "VARCHAR"}]}],
+                "infrastructure": {"containerization": "Docker Compose", "reverse_proxy": "Nginx", "monitoring": "Prometheus"},
+                "security_model": {"auth": "JWT", "tls": False, "secrets_management": "env vars"}
+            }
+
+        os.makedirs(f"./projects/{project_id}", exist_ok=True)
+        artifact_path = f"./projects/{project_id}/s4_architecture_output.json"
+        with open(artifact_path, "w", encoding="utf-8") as f:
+            json.dump(parsed, f, indent=2)
+
+        self._log_handover(f"S4 completed. Architecture saved: {artifact_path}")
+
+        return {
+            "status": "complete",
+            "architecture": parsed,
+            "artifact": parsed,
+            "artifact_path": artifact_path,
+            "next_stage": task.get("next_stage") or self._get_default_next_stage()
         }
 
-        if self.brain:
-            self.brain.store_fact(self.agent_id, f"Architecture designed for {prd.get('metadata', {}).get('title')}", "architecture")
-
-        return {"status": "complete", "architecture": architecture, "next_stage": "s5_backend"}
-
-    def _generate_default_components(self) -> List[Dict]:
-        return [
-            {"name": "Frontend Portal", "tech": "React SPA", "purpose": "User dashboard, metrics charts, and control interface."},
-            {"name": "API Gateway", "tech": "FastAPI + Traefik", "purpose": "Routes requests, manages rate limits, and validates CORS."},
-            {"name": "Database Cluster", "tech": "KuzuDB + SQLite", "purpose": "Manages local memory recall and session fact trees."},
-            {"name": "Worker Node", "tech": "Python Async Task Runner", "purpose": "Handles background agent execution and third-party integrations."}
-        ]
-
-    def _generate_default_data_flow(self) -> List[str]:
-        return [
-            "User clicks UI -> API Gateway routes to Frontend SPA",
-            "SPA triggers start -> FastAPI routes execution to Swarm Orchestrator",
-            "Swarm Orchestrator -> queries facts in KuzuDB Database Cluster",
-            "Worker Node processes task -> updates status and broadcasts via WebSockets"
-        ]
+    def _safe_parse_json(self, text: str) -> dict:
+        m = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+        if m:
+            try: return json.loads(m.group(1).strip())
+            except Exception: pass
+        m2 = re.search(r'\{.*\}', text, re.DOTALL)
+        if m2:
+            try: return json.loads(m2.group(0))
+            except Exception: pass
+        return {}

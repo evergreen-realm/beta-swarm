@@ -2,6 +2,8 @@ import ast
 import logging
 import os
 import re
+import subprocess
+import json
 from typing import Dict, Any, List
 
 from beta_swarm.agents.base import BaseAgent
@@ -22,6 +24,7 @@ class X3PerformanceReviewAgent(BaseAgent):
 
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         project_path = task.get("project_path", "./projects/new_project")
+        self._log_handover(f"X3 Performance Review started. path={project_path}")
         findings: List[Dict] = []
 
         # 1. N+1 query detection
@@ -36,9 +39,13 @@ class X3PerformanceReviewAgent(BaseAgent):
         # 4. Unbounded queries (no LIMIT)
         findings.extend(self._check_unbounded_queries(project_path))
 
+        # 5. ruff performance/complexity rules (if installed)
+        findings.extend(self._run_ruff_perf(project_path))
+
         passed = len([f for f in findings if f["severity"] == "critical"]) == 0
 
         logger.info(f"[X3] Performance review: {len(findings)} issues, passed={passed}")
+        self._log_handover(f"X3 completed. {len(findings)} issues, passed={passed}")
 
         if self.brain:
             self.brain.store_fact(
@@ -51,6 +58,7 @@ class X3PerformanceReviewAgent(BaseAgent):
             "status": "complete",
             "findings": findings,
             "passed": passed,
+            "next_stage": task.get("next_stage", "x4_review_board")
         }
 
     # ------------------------------------------------------------------
@@ -188,6 +196,39 @@ class X3PerformanceReviewAgent(BaseAgent):
                     "message": "Unbounded .all() query — consider adding .limit()",
                 })
 
+        return findings
+
+    # ------------------------------------------------------------------
+    # ruff performance/complexity linting
+    # ------------------------------------------------------------------
+
+    def _run_ruff_perf(self, path: str) -> List[Dict]:
+        """Run ruff with performance and complexity rules."""
+        findings: List[Dict] = []
+        try:
+            result = subprocess.run(
+                ["ruff", "check", path,
+                 "--select", "C90,PERF,E501,W",  # complexity, performance, line length, warnings
+                 "--output-format", "json",
+                 "--exclude", "__pycache__,venv,.venv,node_modules"],
+                capture_output=True, text=True, timeout=30
+            )
+            data = json.loads(result.stdout or "[]") if result.stdout.strip().startswith("[") else []
+            for issue in data:
+                code = issue.get("code", "")
+                sev = "warning" if code.startswith("C") or code.startswith("PERF") else "info"
+                findings.append({
+                    "severity": sev,
+                    "type": f"ruff_{code.lower()}",
+                    "file": issue.get("filename", path),
+                    "line": issue.get("location", {}).get("row", 0),
+                    "message": f"[ruff] {issue.get('message', '')}",
+                })
+            logger.info(f"[X3] ruff perf: {len(findings)} issues")
+        except FileNotFoundError:
+            logger.debug("[X3] ruff not installed — skipping")
+        except Exception as e:
+            logger.warning(f"[X3] ruff perf failed (non-fatal): {e}")
         return findings
 
     # ------------------------------------------------------------------

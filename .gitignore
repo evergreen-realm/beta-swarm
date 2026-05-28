@@ -70,3 +70,8 @@ checkpoints/
 # Old backup dirs
 Beta_Swarnv2_OLD_BACKUP/
 backup/
+
+# Local report/run artifacts
+verify_report.json
+Production-Readiness-Report.json
+gumloop_results/

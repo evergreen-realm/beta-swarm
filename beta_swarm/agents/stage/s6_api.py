@@ -1,167 +1,157 @@
-import logging
-import os
-from typing import Dict, Any, List
-
-try:
-    import requests
-    _REQUESTS_AVAILABLE = True
-except ImportError:
-    _REQUESTS_AVAILABLE = False
-
 from beta_swarm.agents.base import BaseAgent
+import json, re, os, logging
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
-
 class S6APIAgent(BaseAgent):
-    """
-    S6: API Integration Agent
-    Stage 6: API Integration
-    Tests the generated backend endpoints and generates a JavaScript APIClient.
-    Falls back gracefully when the backend is not running (offline mode).
-    """
-
     def __init__(self, brain=None):
-        super().__init__("s6_api", "API Integration Agent", "stage", brain)
+        super().__init__("s6_api", "API Integration Agent", "Stage 6: API Integration", brain)
+
+    def _get_default_next_stage(self):
+        return "s7_frontend"
 
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        backend_url = task.get("backend_url", "http://localhost:8000")
-        
+        project_id = task.get("project_id", "default")
+        project_path = task.get("project_path", f"./projects/{project_id}")
         s4_out = task.get("s4_architecture", {})
         architecture = s4_out.get("architecture") or task.get("architecture", {})
-        
-        s3_out = task.get("s3_prd", {})
-        prd = s3_out.get("prd") or task.get("prd") or {}
-        
-        project_path = task.get("project_path", "./projects/new_project")
-        blueprint = prd.get("blueprint", {})
+        api_contracts = architecture.get("api_contracts", [
+            {"endpoint": "/api/v1/items/", "method": "GET"},
+            {"endpoint": "/api/v1/items/", "method": "POST"},
+        ])
 
-        # 1. Test live endpoints (optional)
-        tests = self._test_endpoints(backend_url)
-        
-        # 2. Synthesize custom API Client
-        prompt = f"""
-        Generate a production-ready JavaScript API Client (APIClient.js) for the project "{prd.get('metadata', {}).get('title')}".
-        
-        TECHNICAL BLUEPRINT:
-        - API SPEC: {blueprint.get('api_spec')}
-        - DATA SCHEMA: {blueprint.get('data_schema')}
-        
-        REQUIREMENTS:
-        - Use modern ES6 class syntax.
-        - Include a constructor that takes a baseURL.
-        - Implement typed methods for EVERY endpoint defined in the API SPEC.
-        - Use fetch() with proper error handling and JSON parsing.
-        - Ensure method names are intuitive (e.g., listSensors, createReading).
-        - Export the class as default.
-        - NO STUBS. Implement all logic.
-        """
-        
-        client_dir = os.path.join(project_path, "frontend")
+        self._log_handover(f"S6 started. Project={project_id}")
+
+        prompt = f"""You are an expert frontend developer. Generate a JavaScript API client.
+
+API Contracts:
+{json.dumps(api_contracts, indent=2)[:2000]}
+
+Generate a complete APIClient.js that:
+1. Has a base URL configuration
+2. Has methods for each endpoint (getItems, createItem, updateItem, deleteItem, etc.)
+3. Uses fetch() with proper headers (Content-Type, Authorization)
+4. Handles errors gracefully
+5. Returns parsed JSON
+
+Output ONLY the JavaScript code, no markdown."""
+
+        api_client_code = self._call_llm(prompt, task_type="s6_api")
+
+        # Extract code from markdown block if wrapped
+        m = re.search(r'```(?:javascript|js)?\s*\n?(.*?)\n?```', api_client_code, re.DOTALL)
+        if m:
+            api_client_code = m.group(1).strip()
+
+        # Fallback API client
+        if len(api_client_code) < 100:
+            api_client_code = self._generate_fallback_client(api_contracts)
+
+        # Write APIClient.js
+        client_dir = os.path.join(project_path, "frontend", "src")
         os.makedirs(client_dir, exist_ok=True)
-        
-        generated_files = self.generate_codebase(prompt, client_dir)
-        
-        # Read and validate the generated APIClient.js code to return it in the result dictionary
-        client_code = ""
-        client_file = os.path.join(client_dir, "APIClient.js")
-        
-        should_write = not os.path.exists(client_file)
-        if not should_write:
-            try:
-                with open(client_file, "r", encoding="utf-8") as f:
-                    client_code = f.read()
-                if "listItems" not in client_code or "class APIClient" not in client_code:
-                    should_write = True
-            except Exception:
-                should_write = True
-                
-        if should_write:
-            # Fallback code if generation returned empty or incomplete client
-            client_code = """class APIClient {
-    constructor(baseURL) {
-        this.baseURL = baseURL || 'http://localhost:8000';
-    }
-    async listItems() {
-        const res = await fetch(`${this.baseURL}/api/v1/items/`);
-        return await res.json();
-    }
-    async createItem(data) {
-        const res = await fetch(`${this.baseURL}/api/v1/items/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return await res.json();
-    }
-}
-export { APIClient };
-export default APIClient;
-"""
-            os.makedirs(os.path.dirname(client_file), exist_ok=True)
-            with open(client_file, "w", encoding="utf-8") as f:
-                f.write(client_code)
-            if "APIClient.js" not in generated_files:
-                generated_files.append("APIClient.js")
-        
-        passed = sum(1 for t in tests if t.get("passed"))
-        logger.info(f"[S6] API tests: {passed}/{len(tests)} passed. Client synthesized: {generated_files}")
+        client_path = os.path.join(client_dir, "APIClient.js")
+        with open(client_path, "w", encoding="utf-8") as f:
+            f.write(api_client_code)
 
-        if self.brain:
-            self.brain.store_fact(
-                self.agent_id,
-                f"API client synthesized based on blueprint. {passed} tests passed.",
-                "api",
-            )
+        artifact_path = f"./projects/{project_id}/s6_api_output.json"
+        artifact = {"api_client_path": client_path, "api_contracts": api_contracts}
+        with open(artifact_path, "w", encoding="utf-8") as f:
+            json.dump(artifact, f, indent=2)
+
+        self._log_handover(f"S6 completed. APIClient.js written: {client_path}")
 
         return {
             "status": "complete",
-            "tests": tests,
-            "generated_files": generated_files,
-            "api_client_code": client_code,
-            "next_stage": "s7_frontend",
+            "api_client_code": api_client_code,
+            "api_client_path": client_path,
+            "api_contracts": api_contracts,
+            "artifact": artifact,
+            "artifact_path": artifact_path,
+            "next_stage": task.get("next_stage") or self._get_default_next_stage()
         }
 
-    def _test_endpoints(self, base_url: str) -> List[Dict]:
-        """Probe the live backend. Marks tests as skipped if requests unavailable."""
-        if not _REQUESTS_AVAILABLE:
-            logger.warning("[S6] 'requests' library not installed — skipping live tests.")
-            return []
+    def _generate_fallback_client(self, api_contracts: list) -> str:
+        methods = ""
+        for c in api_contracts[:8]:
+            ep = c.get("endpoint", "/api/v1/items/")
+            method = c.get("method", "GET").upper()
+            fn_name = method.lower() + "_" + re.sub(r'[^a-zA-Z0-9]', '_', ep).strip('_').lower()
+            if method in ("GET", "DELETE"):
+                methods += f"""
+  async {fn_name}(id = null) {{
+    const url = id ? `${{this.baseUrl}}{ep}${{id}}` : `${{this.baseUrl}}{ep}`;
+    const res = await fetch(url, {{ headers: this.headers }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    return res.json();
+  }}
+"""
+            else:
+                methods += f"""
+  async {fn_name}(data) {{
+    const res = await fetch(`${{this.baseUrl}}{ep}`, {{
+      method: '{method}',
+      headers: this.headers,
+      body: JSON.stringify(data)
+    }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    return res.json();
+  }}
+"""
+        return f"""// Auto-generated APIClient by Beta Swarm S6
+class APIClient {{
+  constructor(baseUrl = 'http://localhost:8000', token = null) {{
+    this.baseUrl = baseUrl;
+    this.headers = {{'Content-Type': 'application/json'}};
+    if (token) this.headers['Authorization'] = `Bearer ${{token}}`;
+  }}
 
-        tests = []
-        for method, path, data in self._default_endpoints():
-            try:
-                url = f"{base_url}{path}"
-                if method == "GET":
-                    resp = requests.get(url, timeout=2)
-                elif method == "POST":
-                    resp = requests.post(url, json=data, timeout=2)
-                else:
-                    resp = requests.request(method, url, json=data, timeout=2)
+  setToken(token) {{
+    this.headers['Authorization'] = `Bearer ${{token}}`;
+  }}
 
-                tests.append(
-                    {
-                        "endpoint": path,
-                        "method": method,
-                        "passed": resp.status_code < 400,
-                        "status": resp.status_code,
-                    }
-                )
-            except Exception as e:
-                tests.append(
-                    {
-                        "endpoint": path,
-                        "method": method,
-                        "passed": False,
-                        "error": str(e),
-                    }
-                )
-        return tests
+  async getItems() {{
+    const res = await fetch(`${{this.baseUrl}}/api/v1/items/`, {{ headers: this.headers }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    return res.json();
+  }}
 
-    @staticmethod
-    def _default_endpoints():
-        return [
-            ("GET",  "/health",       None),
-            ("GET",  "/docs",         None),
-            ("GET",  "/api/v1/items/", None),
-        ]
+  async createItem(data) {{
+    const res = await fetch(`${{this.baseUrl}}/api/v1/items/`, {{
+      method: 'POST', headers: this.headers, body: JSON.stringify(data)
+    }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    return res.json();
+  }}
+
+  async getItem(id) {{
+    const res = await fetch(`${{this.baseUrl}}/api/v1/items/${{id}}`, {{ headers: this.headers }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    return res.json();
+  }}
+
+  async updateItem(id, data) {{
+    const res = await fetch(`${{this.baseUrl}}/api/v1/items/${{id}}`, {{
+      method: 'PUT', headers: this.headers, body: JSON.stringify(data)
+    }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    return res.json();
+  }}
+
+  async deleteItem(id) {{
+    const res = await fetch(`${{this.baseUrl}}/api/v1/items/${{id}}`, {{
+      method: 'DELETE', headers: this.headers
+    }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    return res.json();
+  }}
+
+  async healthCheck() {{
+    const res = await fetch(`${{this.baseUrl}}/health`, {{ headers: this.headers }});
+    return res.json();
+  }}
+{methods}}}
+
+export default APIClient;
+"""

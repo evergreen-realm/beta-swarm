@@ -2,6 +2,8 @@ import logging
 import math
 import os
 import re
+import subprocess
+import json
 from typing import Dict, Any, List
 
 from beta_swarm.agents.base import BaseAgent
@@ -52,9 +54,10 @@ class X2SecurityReviewAgent(BaseAgent):
 
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         project_path = task.get("project_path", "./projects/new_project")
+        self._log_handover(f"X2 Security Review started. path={project_path}")
         findings: List[Dict] = []
 
-        # 1. Secret scanning
+        # 1. Secret scanning (regex + Shannon entropy)
         findings.extend(self._scan_secrets(project_path))
 
         # 2. SQL injection
@@ -63,9 +66,16 @@ class X2SecurityReviewAgent(BaseAgent):
         # 3. XSS
         findings.extend(self._scan_xss(project_path))
 
-        passed = len([f for f in findings if f["severity"] == "critical"]) == 0
+        # 4. bandit static analysis (if installed)
+        findings.extend(self._run_bandit(project_path))
+
+        # 5. ruff security rules (if installed)
+        findings.extend(self._run_ruff_security(project_path))
+
+        passed = len([f for f in findings if f["severity"] in ("critical", "high")]) == 0
 
         logger.info(f"[X2] Security scan: {len(findings)} findings, passed={passed}")
+        self._log_handover(f"X2 completed. {len(findings)} findings, passed={passed}")
 
         if self.brain:
             self.brain.store_fact(
@@ -78,6 +88,7 @@ class X2SecurityReviewAgent(BaseAgent):
             "status": "complete",
             "findings": findings,
             "passed": passed,
+            "next_stage": task.get("next_stage", "x3_performance_review")
         }
 
     # ------------------------------------------------------------------
@@ -155,6 +166,62 @@ class X2SecurityReviewAgent(BaseAgent):
                     "message": "Potential XSS vulnerability — avoid raw HTML injection",
                 })
 
+        return findings
+
+    # ------------------------------------------------------------------
+    # bandit tool integration
+    # ------------------------------------------------------------------
+
+    def _run_bandit(self, path: str) -> List[Dict]:
+        """Run bandit on the project path and parse JSON output."""
+        findings: List[Dict] = []
+        try:
+            result = subprocess.run(
+                ["bandit", "-r", path, "-f", "json", "-q",
+                 "--exclude", ".git,__pycache__,venv,.venv,node_modules"],
+                capture_output=True, text=True, timeout=60
+            )
+            data = json.loads(result.stdout or "{}") if result.stdout.strip() else {}
+            for issue in data.get("results", []):
+                sev = issue.get("issue_severity", "LOW").lower()
+                sev_map = {"high": "high", "medium": "warning", "low": "info"}
+                findings.append({
+                    "severity": sev_map.get(sev, "info"),
+                    "type": "bandit_" + issue.get("test_id", "unknown").lower(),
+                    "file": issue.get("filename", path),
+                    "line": issue.get("line_number", 0),
+                    "message": f"[bandit] {issue.get('issue_text', '')}",
+                })
+            logger.info(f"[X2] bandit: {len(findings)} issues")
+        except FileNotFoundError:
+            logger.debug("[X2] bandit not installed — skipping")
+        except Exception as e:
+            logger.warning(f"[X2] bandit failed (non-fatal): {e}")
+        return findings
+
+    def _run_ruff_security(self, path: str) -> List[Dict]:
+        """Run ruff with security-related rules (S prefix = flake8-bandit)."""
+        findings: List[Dict] = []
+        try:
+            result = subprocess.run(
+                ["ruff", "check", path, "--select", "S", "--output-format", "json",
+                 "--exclude", "__pycache__,venv,.venv,node_modules"],
+                capture_output=True, text=True, timeout=30
+            )
+            data = json.loads(result.stdout or "[]") if result.stdout.strip() else []
+            for issue in data:
+                findings.append({
+                    "severity": "warning",
+                    "type": f"ruff_{issue.get('code', 'S000').lower()}",
+                    "file": issue.get("filename", path),
+                    "line": issue.get("location", {}).get("row", 0),
+                    "message": f"[ruff] {issue.get('message', '')}",
+                })
+            logger.info(f"[X2] ruff security: {len(findings)} issues")
+        except FileNotFoundError:
+            logger.debug("[X2] ruff not installed — skipping")
+        except Exception as e:
+            logger.warning(f"[X2] ruff failed (non-fatal): {e}")
         return findings
 
     # ------------------------------------------------------------------
