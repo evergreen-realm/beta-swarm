@@ -12,26 +12,47 @@ BASE_DIR = "C:/Users/Admin/Documents/Beta Swarnv2"
 PROMPTS_DIR = f"{BASE_DIR}/beta_swarm/agents/prompts"
 PLAYBOOKS_DIR = f"{BASE_DIR}/beta_swarm/playbooks"
 
+from beta_swarm.brain.prompt_performance_tracker import PromptPerformanceTracker
+from beta_swarm.brain.pattern_extractor import PatternExtractor
+from beta_swarm.brain.evolver_manager import EvolverManager
+
 class B3EvolverAgent(BaseAgent):
     def __init__(self, brain=None):
         super().__init__("B3", "Evolver", "brain", brain)
 
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        try:
-            logger.info("B3: Evolving system from workflow data.")
-            if not isinstance(task, dict):
-                task = {}
-            learnings = self._extract_learnings(task)
-            
-            if learnings:
-                self._update_templates(learnings)
-                self._update_prompts(learnings)
-                self._update_playbooks(task.get("errors", []))
-                
-            return {"status": "complete", "learnings_count": len(learnings)}
-        except Exception as e:
-            logger.error(f"Evolver execution failed: {e}")
-            return {"status": "failed", "error": str(e)}
+        if not isinstance(task, dict):
+            task = {}
+        project_id = task.get("project_id") or "default"
+        project_path = f"./projects/{project_id}"
+        
+        # Get underperforming agents
+        tracker = PromptPerformanceTracker()
+        underperformers = tracker.get_underperforming_agents()
+        
+        # Extract patterns from the completed project
+        extractor = PatternExtractor(project_path)
+        patterns = extractor.extract()
+        
+        # Prepare evolution data
+        evolution_data = {
+            "project_id": project_id,
+            "underperforming_agents": underperformers,
+            "patterns": patterns,
+            "outcome": task.get("outcome", {})
+        }
+        
+        evolver = EvolverManager()
+        report = evolver.evolve(evolution_data)
+        
+        # Update prompts for underperforming agents (simple example)
+        for agent in underperformers:
+            prompt_file = f"beta_swarm/agents/prompts/{agent['agent_id']}_system.txt"
+            if os.path.exists(prompt_file):
+                with open(prompt_file, "a") as f:
+                    f.write(f"\n# Auto-tuned: success rate {agent['success_rate']:.0%}. Consider revising approach.\n")
+        
+        return {"status": "complete", "learnings": report}
 
     def _extract_learnings(self, outcome: Dict[str, Any]) -> List[Dict[str, Any]]:
         learnings = []

@@ -175,6 +175,33 @@ for tool in ["bandit", "ruff", "semgrep"]:
     except Exception as e:
         record(f"Tool: {tool}", "WARN", str(e)[:60])
 
+# ── SELF‑GROWING BRAIN COMPONENTS ───────────────────────────────
+print("\n── SELF‑GROWING BRAIN COMPONENTS ───────────────────────────────")
+try:
+    from beta_swarm.brain.prompt_performance_tracker import PromptPerformanceTracker
+    ppt = PromptPerformanceTracker()
+    ppt.log("test_agent", "test", "dummy prompt", True, 0.5)
+    under = ppt.get_underperforming_agents()
+    record("PromptPerformanceTracker", "PASS", f"logged, {len(under)} underperformers")
+except Exception as e:
+    record("PromptPerformanceTracker", "FAIL", str(e)[:120])
+
+try:
+    from beta_swarm.brain.pattern_extractor import PatternExtractor
+    # dummy test with a temporary directory
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with open(os.path.join(tmpdir, "test.py"), "w") as f:
+            f.write("FastAPI")
+        pe = PatternExtractor(tmpdir)
+        pat = pe.extract()
+        if "FastAPI" in pat.get("tech_stack", []):
+            record("PatternExtractor", "PASS", "extracted FastAPI")
+        else:
+            record("PatternExtractor", "WARN", "pattern not found (may need real project)")
+except Exception as e:
+    record("PatternExtractor", "FAIL", str(e)[:120])
+
 # ── Summary ──────────────────────────────────────────────────────── #
 total = results["pass"] + results["fail"] + results["warn"]
 print(f"\n{'='*65}")

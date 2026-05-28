@@ -63,11 +63,17 @@ class EvolverManager:
                         pass
 
     def _fallback_evolve(self, project_data: dict, error_msg: str) -> dict:
-        logger.info("Executing Evolver internal fallback using LLM optimization pipeline.")
+        underperforming = project_data.get("underperforming_agents", [])
+        patterns = project_data.get("patterns", {})
+        logger.info(
+            f"Executing Evolver internal fallback. Underperforming agents: {len(underperforming)}, "
+            f"Extracted patterns: {list(patterns.keys())}"
+        )
         
-        # Create LLM prompt to perform optimization of the project data
+        # Create LLM prompt incorporating performance tracker data and extracted patterns
         prompt = (
-            f"Analyze the following project structure metadata and generate a list of optimized evolution strategies:\n"
+            f"Analyze the following project data (including underperforming agents and extracted code patterns) "
+            f"and generate optimized evolution and prompt tuning strategies:\n"
             f"{json.dumps(project_data, indent=2)}\n\n"
             f"Return a JSON block containing the fields 'status', 'evolution_metrics' (efficiency_gain_pct, refinement_cycles), "
             f"and 'stages' (list of dicts containing stage name, status, and optimization description)."
