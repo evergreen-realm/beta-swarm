@@ -29,10 +29,14 @@ class S2ResearchAgent(BaseAgent):
             raw_results, sources = self._ddg_search(query)
         elif depth == "medium":
             raw_results, sources = self._openclaw_search(query)
-        else:  # edge / deep
+        elif depth == "edge":
+            raw_results, sources = self._hermes_search(query)
+        else:  # deep
             raw_results, sources = self._parallel_web_search(query, concept)
 
         # Fallback chain
+        if not raw_results:
+            raw_results, sources = self._hermes_search(query)
         if not raw_results:
             raw_results, sources = self._ddg_search(query)
         if not raw_results:
@@ -184,3 +188,23 @@ Return a JSON object:
             except Exception:
                 pass
         return {}
+
+    def _hermes_search(self, query: str) -> tuple:
+        results, sources = [], []
+        try:
+            from beta_swarm.orchestration.hermes_daemon import HermesDaemon
+            daemon = HermesDaemon()
+            task_id = daemon.delegate_task(query)
+            res = daemon.poll_task(task_id, timeout=30)
+            if res.get("status") == "completed":
+                results.append({
+                    "title": f"Hermes Research on {query}",
+                    "snippet": res.get("result", ""),
+                    "url": "http://localhost:3000"
+                })
+                sources.append("http://localhost:3000")
+                logger.info(f"[S2] HermesDaemon completed task {task_id}")
+            daemon.shutdown()
+        except Exception as e:
+            logger.warning(f"[S2] HermesDaemon research failed: {e}")
+        return results, sources

@@ -148,7 +148,53 @@ class WorkflowEngine:
         except Exception as e:
             logger.warning(f"Failed to initialize RemediationEngine: {e}")
             self.remediation = None
+
+        # Checkpoint recovery state
+        self.checkpoint_state_path = "checkpoints/pipeline_state.json"
+        os.makedirs(os.path.dirname(self.checkpoint_state_path), exist_ok=True)
+        self.saved_state = self._load_pipeline_state()
             
+    def _load_pipeline_state(self) -> Optional[dict]:
+        if os.path.exists(self.checkpoint_state_path):
+            try:
+                with open(self.checkpoint_state_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load pipeline state: {e}")
+        return None
+
+    def _save_pipeline_state(self, current_stage: str, completed_stages: list, context: dict, start_time: float, error: Optional[str] = None):
+        try:
+            import time
+            serializable_context = {}
+            for k, v in context.items():
+                try:
+                    json.dumps({k: v})
+                    serializable_context[k] = v
+                except Exception:
+                    pass
+            state = {
+                "current_stage": current_stage,
+                "completed_stages": completed_stages,
+                "context": serializable_context,
+                "start_time": start_time,
+                "last_update_time": time.time(),
+                "error": error
+            }
+            with open(self.checkpoint_state_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+            logger.info(f"Pipeline state checkpointed at stage: {current_stage}")
+        except Exception as e:
+            logger.error(f"Failed to save pipeline state: {e}")
+
+    def _delete_pipeline_state(self):
+        if os.path.exists(self.checkpoint_state_path):
+            try:
+                os.remove(self.checkpoint_state_path)
+                logger.info("Pipeline state deleted successfully (run finished).")
+            except Exception as e:
+                logger.error(f"Failed to delete pipeline state: {e}")
+
     def shutdown(self):
         """Cleanup and shutdown background resources."""
         if hasattr(self, 'learning_loop') and self.learning_loop:
@@ -225,6 +271,19 @@ class WorkflowEngine:
         self.results = {"project_id": self.project_id, "run_id": self.run_id, "stages": {}}
         import time
         start_time = time.time()
+
+        # Check if saved_state exists and can be resumed
+        resume_run = project_input.get("resume") or os.getenv("BETA_SWARM_AUTO_RESUME") == "1"
+        if self.saved_state and not resume_run:
+            logger.info(f"Saved state found under '{self.checkpoint_state_path}'. Automatically resuming.")
+            resume_run = True
+
+        if resume_run and self.saved_state:
+            completed_stages = self.saved_state.get("completed_stages", [])
+            project_input.update(self.saved_state.get("context", {}))
+            start_time = self.saved_state.get("start_time", start_time)
+            logger.info(f"Successfully restored context for {len(completed_stages)} completed stages.")
+
         try:
             await self._execute_dag(project_input)
         finally:

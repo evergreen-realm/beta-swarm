@@ -43,6 +43,15 @@ class BaseAgent(ABC):
                 logger.info(f"[{self.name}] Loaded auto-tuned system prompt override.")
         except Exception:
             pass
+        # Phase 3: auto-subscribe this agent to its own topic on the message bus
+        try:
+            from beta_swarm.core.message_bus import MessageBus
+            self._bus = MessageBus()
+            self._bus.subscribe(agent_id, agent_id, self.on_message)
+            logger.debug(f"[{self.name}] Auto-subscribed to topic '{agent_id}' on MessageBus.")
+        except Exception as _bus_err:
+            logger.debug(f"[{self.name}] MessageBus auto-subscribe skipped: {_bus_err}")
+            self._bus = None
 
     def _generate_idempotency_key(self) -> str:
         return str(uuid.uuid4())
@@ -319,3 +328,41 @@ class BaseAgent(ABC):
 
     def log_error(self, message: str):
         self._log_handover(f"ERROR: {message}")
+
+    # ── Phase 3 Message Bus helpers ───────────────────────────────── #
+    def on_message(self, payload: Dict[str, Any]) -> None:
+        """Override in subclasses to handle messages received on this agent's topic."""
+        logger.debug(f"[{self.name}] Received bus message: {payload}")
+
+    def subscribe_to(self, topic: str, callback=None) -> None:
+        """Subscribe this agent to an additional topic.
+        Uses self.on_message as the callback unless one is provided.
+        """
+        if self._bus is None:
+            logger.warning(f"[{self.name}] MessageBus not available; cannot subscribe to '{topic}'.")
+            return
+        cb = callback if callback is not None else self.on_message
+        self._bus.subscribe(self.agent_id, topic, cb)
+
+    def unsubscribe_from(self, topic: str) -> None:
+        """Remove this agent's subscription to a specific topic."""
+        if self._bus is None:
+            return
+        self._bus.unsubscribe(self.agent_id, topic)
+
+    def unsubscribe_all(self) -> None:
+        """Unsubscribe from all topics (called on agent shutdown/completion)."""
+        if self._bus is None:
+            return
+        # Collect all topics this agent is subscribed to
+        with self._bus._subs_lock:
+            keys = [k for k in self._bus._subs if k[0] == self.agent_id]
+        for agent_id, topic in keys:
+            self._bus.unsubscribe(agent_id, topic)
+
+    def publish(self, topic: str, payload: Dict[str, Any]) -> Optional[str]:
+        """Publish a message to a bus topic on behalf of this agent."""
+        if self._bus is None:
+            logger.warning(f"[{self.name}] MessageBus not available; cannot publish to '{topic}'.")
+            return None
+        return self._bus.publish(topic, payload, sender=self.agent_id)

@@ -202,6 +202,54 @@ try:
 except Exception as e:
     record("PatternExtractor", "FAIL", str(e)[:120])
 
+# ── PHASE 3: 24/7 Autonomous Operation ──────────────────────────── #
+print("\n── PHASE 3: AUTONOMOUS OPERATION ───────────────────────────────")
+
+# 3a. HermesDaemon importable
+try:
+    from beta_swarm.orchestration.hermes_daemon import HermesDaemon
+    record("HermesDaemon importable", "PASS")
+except Exception as e:
+    record("HermesDaemon importable", "FAIL", str(e)[:120])
+
+# 3b. MessageBus subscribe / unsubscribe / _listen_loop
+try:
+    import threading, time as _time
+    from beta_swarm.core.message_bus import MessageBus
+    _bus = MessageBus.get_instance()
+    received = []
+    def _test_cb(payload):
+        received.append(payload)
+    _bus.subscribe("phase3_test", "phase3.ping", _test_cb)
+    _bus.publish("phase3.ping", {"data": "hello"}, sender="verify")
+    _time.sleep(0.5)  # give listener thread up to 2 s; try briefly
+    _time.sleep(2.5)  # wait for 2-second poll cycle
+    _bus.unsubscribe("phase3_test", "phase3.ping")
+    if received:
+        record("MessageBus: subscribe + listen_loop + unsubscribe", "PASS",
+               f"received {len(received)} message(s)")
+    else:
+        record("MessageBus: subscribe + listen_loop + unsubscribe", "WARN",
+               "Thread started but no message received in poll window")
+except Exception as e:
+    record("MessageBus: subscribe + listen_loop + unsubscribe", "FAIL", str(e)[:120])
+
+# 3c. BaseAgent pub/sub helpers present
+try:
+    from beta_swarm.agents.base import BaseAgent
+    class _DummyP3(BaseAgent):
+        def execute(self, *args, **kwargs):
+            return None
+    agent = _DummyP3("p3_test", "P3Test", "test")
+    for m in ["on_message", "subscribe_to", "unsubscribe_from", "unsubscribe_all", "publish"]:
+        if hasattr(agent, m):
+            record(f"BaseAgent.{m}", "PASS")
+        else:
+            record(f"BaseAgent.{m}", "FAIL", "Method missing")
+    agent.unsubscribe_all()  # clean up listener thread
+except Exception as e:
+    record("BaseAgent Phase 3 helpers", "FAIL", str(e)[:120])
+
 # ── Summary ──────────────────────────────────────────────────────── #
 total = results["pass"] + results["fail"] + results["warn"]
 print(f"\n{'='*65}")

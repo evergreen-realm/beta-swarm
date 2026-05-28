@@ -1,10 +1,10 @@
 """
-SQLite Message Bus — Phase 2 inter-agent communication.
+SQLite Message Bus — Phase 2/3 inter-agent communication.
 Agents can publish messages to named topics and subscribe/consume from them.
-Thread-safe, persistent, WAL-mode SQLite.
+Thread-safe, persistent, WAL-mode SQLite with full pub/sub subscriptions.
 """
 import sqlite3, json, time, uuid, logging, threading
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 
 logger = logging.getLogger(__name__)
 _BUS_PATH = "brain_message_bus.db"
@@ -51,6 +51,18 @@ class MessageBus:
                 consumed_at REAL
             )""")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_topic_status ON messages(topic, status)")
+            conn.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
+                id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                callback_module TEXT NOT NULL,
+                callback_name TEXT NOT NULL,
+                created_at REAL,
+                UNIQUE(agent_id, topic)
+            )""")
+        # In-memory registry: (agent_id, topic) -> (callback, thread, stop_event)
+        self._subs: Dict[tuple, tuple] = {}
+        self._subs_lock = threading.Lock()
 
     # ── Publish ─────────────────────────────────────────────────────────#
     def publish(self, topic: str, payload: Dict[str, Any], sender: str = "system") -> str:
@@ -128,3 +140,88 @@ class MessageBus:
                 "DELETE FROM messages WHERE status='consumed' AND consumed_at < ?", (cutoff,)
             )
         return cursor.rowcount
+
+    # ── Subscribe ────────────────────────────────────────────────────── #
+    def subscribe(self, agent_id: str, topic: str, callback: Callable[[Dict[str, Any]], None]) -> None:
+        """Subscribe agent_id to topic; fires callback(payload) for each new message.
+        Persists subscription to SQLite and starts a background polling thread.
+        """
+        key = (agent_id, topic)
+        with self._subs_lock:
+            if key in self._subs:
+                logger.debug(f"[Bus] {agent_id} already subscribed to '{topic}'. Skipping.")
+                return
+
+            # Persist to DB
+            sub_id = str(uuid.uuid4())
+            cb_module = getattr(callback, "__module__", "__main__") or "__main__"
+            cb_name = getattr(callback, "__qualname__", callback.__name__)
+            conn = self._conn()
+            try:
+                with conn:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO subscriptions "
+                        "(id, agent_id, topic, callback_module, callback_name, created_at) "
+                        "VALUES (?,?,?,?,?,?)",
+                        (sub_id, agent_id, topic, cb_module, cb_name, time.time())
+                    )
+            except Exception as e:
+                logger.warning(f"[Bus] Could not persist subscription: {e}")
+
+            # Start background listener thread
+            stop_event = threading.Event()
+            thread = threading.Thread(
+                target=self._listen_loop,
+                args=(agent_id, topic, callback, stop_event),
+                daemon=True,
+                name=f"bus-listener-{agent_id}-{topic}"
+            )
+            self._subs[key] = (callback, thread, stop_event)
+            thread.start()
+            logger.info(f"[Bus] {agent_id} subscribed to '{topic}' (thread={thread.name})")
+
+    # ── Unsubscribe ──────────────────────────────────────────────────── #
+    def unsubscribe(self, agent_id: str, topic: str) -> None:
+        """Stop the listener thread and remove the subscription."""
+        key = (agent_id, topic)
+        with self._subs_lock:
+            entry = self._subs.pop(key, None)
+        if entry:
+            _, thread, stop_event = entry
+            stop_event.set()
+            thread.join(timeout=5)
+            logger.info(f"[Bus] {agent_id} unsubscribed from '{topic}'")
+        # Remove from DB
+        conn = self._conn()
+        try:
+            with conn:
+                conn.execute(
+                    "DELETE FROM subscriptions WHERE agent_id=? AND topic=?",
+                    (agent_id, topic)
+                )
+        except Exception as e:
+            logger.warning(f"[Bus] Could not remove subscription from DB: {e}")
+
+    # ── Background listener ──────────────────────────────────────────── #
+    def _listen_loop(self, agent_id: str, topic: str,
+                     callback: Callable, stop_event: threading.Event) -> None:
+        """Polls the messages table every 2 s for pending messages on topic.
+        When found, calls callback(payload) and marks message consumed.
+        Runs until stop_event is set.
+        """
+        poll_interval = 2
+        logger.debug(f"[Bus] Listener started: agent={agent_id} topic='{topic}'")
+        while not stop_event.is_set():
+            try:
+                msg = self.consume(topic, consumer=agent_id)
+                if msg:
+                    try:
+                        callback(msg["payload"])
+                    except Exception as cb_err:
+                        logger.error(
+                            f"[Bus] Callback error for {agent_id}/{topic}: {cb_err}"
+                        )
+            except Exception as poll_err:
+                logger.warning(f"[Bus] Poll error for {agent_id}/{topic}: {poll_err}")
+            stop_event.wait(timeout=poll_interval)
+        logger.debug(f"[Bus] Listener stopped: agent={agent_id} topic='{topic}'")

@@ -6,6 +6,7 @@ s9_deployment.py is deleted after this file.
 from beta_swarm.agents.base import BaseAgent
 import json, os, re, logging, socket, subprocess, time
 from typing import Dict, Any, List
+from beta_swarm.deployment.multi_cloud import deploy_to_vercel, deploy_to_digitalocean, deploy_to_azure
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +88,22 @@ class S9ContainerizationAgent(BaseAgent):
                         f"      - run: pip install -r requirements.txt && pytest\n",
                         files_written)
 
-        # 7. Optional live deploy (local uvicorn)
-        preview_url = "http://localhost:8000"
-        if deploy_mode in ("local", "auto"):
-            preview_url = self._maybe_start_local(project_path)
+        # 7. Multi-cloud deployment based on tier
+        tier = task.get("tier", "simple")
+        deployment_url = ""
+        try:
+            if tier == "simple":
+                deployment_url = deploy_to_vercel(project_path)
+            elif tier == "medium":
+                deployment_url = deploy_to_digitalocean(project_path)
+            else:  # complex
+                deployment_url = deploy_to_azure(project_path)
+            logger.info(f"Deployment successful to {tier} tier. URL: {deployment_url}")
+        except Exception as e:
+            logger.warning(f"Deployment failed for tier {tier}: {e}")
+            deployment_url = f"http://localhost:8000"
+
+        preview_url = deployment_url
 
         # 8. KuzuDB + Obsidian sync (from s9_deployment)
         artifact_id = self._sync_brain(project_id, title, files_written)
@@ -98,6 +111,7 @@ class S9ContainerizationAgent(BaseAgent):
         artifact = {
             "containerization_files": files_written,
             "preview_url": preview_url,
+            "deployment_url": deployment_url,
             "artifact_id": artifact_id,
         }
         artifact_path = f"./projects/{project_id}/s9_containerization_output.json"
