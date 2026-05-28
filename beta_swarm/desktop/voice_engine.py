@@ -85,12 +85,12 @@ class VoiceEngine:
     
     def open_dashboard(self):
         subprocess.Popen([
-            sys.executable, "-m", "beta_swarm.entity.native_window"
+            sys.executable, "-m", "beta_swarm.desktop.native_window"
         ], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
     
     def open_galaxy(self):
         subprocess.Popen([
-            sys.executable, "-m", "beta_swarm.entity.galaxy_window"
+            sys.executable, "-m", "beta_swarm.desktop.galaxy_window"
         ], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
     
     def report_status(self):

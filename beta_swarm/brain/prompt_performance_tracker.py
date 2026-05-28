@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 class PromptPerformanceTracker:
-    def __init__(self, db_path: str = "brain_sqlite.db"):
+    def __init__(self, db_path: str = "C:/Users/Admin/Documents/Beta Swarnv2/brain_sqlite.db"):
         self.db_path = db_path
         self._init_db()
 

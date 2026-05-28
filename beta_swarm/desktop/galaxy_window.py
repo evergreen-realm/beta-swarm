@@ -279,7 +279,7 @@ class GalaxyAPI:
     def open_dashboard(self):
         import subprocess
         subprocess.Popen([
-            sys.executable, "-m", "beta_swarm.entity.native_window"
+            sys.executable, "-m", "beta_swarm.desktop.native_window"
         ], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
 
 def launch_galaxy_window():

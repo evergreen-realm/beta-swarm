@@ -7,7 +7,7 @@ import sqlite3, json, time, uuid, logging, threading
 from typing import Dict, Any, List, Optional, Callable
 
 logger = logging.getLogger(__name__)
-_BUS_PATH = "brain_message_bus.db"
+_BUS_PATH = "C:/Users/Admin/Documents/Beta Swarnv2/brain_message_bus.db"
 
 
 class MessageBus:

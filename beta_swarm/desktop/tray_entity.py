@@ -14,9 +14,9 @@ from PIL import Image
 import pystray
 from pystray import MenuItem as item
 
-from beta_swarm.entity.wake_sequence import WakeSequence
-from beta_swarm.entity.health_orchestrator import HealthOrchestrator
-from beta_swarm.entity.obsidian_logger import ObsidianLogger
+from beta_swarm.desktop.wake_sequence import WakeSequence
+from beta_swarm.desktop.health_orchestrator import HealthOrchestrator
+from beta_swarm.desktop.obsidian_logger import ObsidianLogger
 
 class SwarmEntity:
     """The Living Icon - Optimized System Tray Entity for Beta Swarm."""
@@ -86,7 +86,7 @@ class SwarmEntity:
         self.state = "active"
         
         try:
-            from beta_swarm.entity.native_window import launch_native_window
+            from beta_swarm.desktop.native_window import launch_native_window
             port = int(os.environ.get("PORT", 8999))
             launch_native_window(port)
         except ImportError:
@@ -98,19 +98,19 @@ class SwarmEntity:
     def open_galaxy(self):
         """Open the 3D Galaxy View (Default action)"""
         self.logger.log_action("Open Galaxy")
-        subprocess.Popen([sys.executable, "-m", "beta_swarm.entity.galaxy_window"], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
+        subprocess.Popen([sys.executable, "-m", "beta_swarm.desktop.galaxy_window"], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
         
     def open_dashboard(self):
         """Open Native Dashboard"""
         self.logger.log_action("Open Dashboard")
-        subprocess.Popen([sys.executable, "-m", "beta_swarm.entity.native_window"], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
+        subprocess.Popen([sys.executable, "-m", "beta_swarm.desktop.native_window"], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
         self.state = "active"
 
     def toggle_voice(self, icon, item):
         self.voice_enabled = not getattr(self, "voice_enabled", False)
         if self.voice_enabled:
             self.logger.log_action("Voice Engine Started")
-            self.voice_process = subprocess.Popen([sys.executable, "-m", "beta_swarm.entity.voice_engine"], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
+            self.voice_process = subprocess.Popen([sys.executable, "-m", "beta_swarm.desktop.voice_engine"], cwd=r"C:\Users\Admin\Documents\Beta Swarnv2")
         else:
             self.logger.log_action("Voice Engine Stopped")
             if hasattr(self, "voice_process"):

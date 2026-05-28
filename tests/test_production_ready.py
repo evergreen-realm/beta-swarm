@@ -54,7 +54,7 @@ print("\n--- 3. CRITICAL GAPS ---")
 for mod, cls, name in [
     ("core.identity_manager", "IdentityManager", "IDENTITY.md"),
     ("core.remediation_engine", "RemediationEngine", "Remediation Loop"),
-    ("core.crash_recovery", "CrashRecoveryManager", "Crash Recovery"),
+    ("orchestrator", "CrashRecoveryManager", "Crash Recovery"),
 ]:
     try:
         m = __import__(f"beta_swarm.{mod}", fromlist=[cls])
